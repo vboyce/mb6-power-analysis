@@ -11,6 +11,668 @@ library(lme4)
 library(broom.mixed)
 theme_set(theme_bw())
 ```
+# What does neg-binomial look like
+
+For data distribution, we're using a negative binomial distribution which should be good for count data without the forced mean-variance link that poisson has. 
+
+## Examples
+
+```{r}
+sample <- expand_grid(mean = c(3), dispersion = c(.5, 1, 5, 10, 100), d = c(.2, .3, .4)) |>
+  mutate(dat = pmap(list(mean, dispersion, d), \(m, disp, d) {
+    var <- m + m**2 / disp
+    sd <- sqrt(var)
+    delta <- .5 * d * sqrt(var)
+    m_lower <- m - delta
+    dat_1 <- rnbinom(10000, size = disp, mu = m_lower)
+    m_upper <- m + delta
+    dat_2 <- rnbinom(10000, size = disp, mu = m_upper)
+    tibble(dat = dat_1, type = "lower") |>
+      bind_rows(tibble(dat = dat_2, type = "upper")) |>
+      mutate(sd = sd)
+  })) |>
+  unnest(dat)
+```
+
+here's an example of what these distributions look like for different cohen's d, assuming mean of 3 and trying different dispersion values. 
+
+```{r}
+sample |>
+  ggplot(aes(x = dat, fill = type)) +
+  geom_histogram(binwidth = 1, alpha = .5, position = position_identity()) +
+  facet_grid(dispersion ~ d) +
+  coord_cartesian(xlim = c(0, 20))
+```
+
+also, as a check, we can recover roughly the same cohen's d (using the normal calculation method for pooling sd, but we're at least ballpark okay). This does assume independence. 
+
+```{r}
+check <- sample |>
+  group_by(type, dispersion, d, sd) |>
+  summarize(m_calc = mean(dat), sd_calc = sd(dat)) |>
+  pivot_wider(names_from = type, values_from = c(m_calc, sd_calc)) |>
+  mutate(
+    pooled_sd = sqrt((sd_calc_lower**2 + sd_calc_upper**2) / 2),
+    d_calc = (m_calc_upper - m_calc_lower) / pooled_sd
+  )
+
+check |> ggplot(aes(x = d, y = d_calc, color = as.character(dispersion))) +
+  geom_point() +
+  geom_abline()
+```
+
+# Simulation
+
+to start with, let's just simulate one set of data and explore it. 
+
+Parameter selections: we need to choose values for these, for a first attempt these are some guesses. 
+
+(experiment size)
+
+- number of labs: 10
+- number of infants / lab / age: 16
+
+(distributional)
+
+- mean: 3 
+- dispersion: 1 (looks kinda reasonable from above)
+- max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15) 
+
+(fixed effects, all in units of SD)
+
+* interaction (match/mismatch) effect: .4
+* simple effect (A > B for child): .4
+* simple effect (A > B for adult): 0
+* age main effect: .2
+* age x interaction: .2
+* age x simple effect: .2
+
+(random effects, all in units of SD)
+
+* sd of labs (intercept): .2
+* sd of labs (adult): .1
+* sd of labs (child): 0
+* sd of labs (adult x child): .2
+* sd of labs (age): 0
+* sd of labs (age x adult): 0
+* sd of labs (age x child): 0
+* sd of labs (age x adult x child): 0
+* sd of infants (intercept): .2
+
+```{r}
+sample_neg_binom <- function(effect, mean, dispersion, max) {
+  # assumes effect in units of sd
+  # mean and dispersion as parameters for nbinom
+  # max is the max value to return -- samples above this are replaced with max
+  # returns a sampled value
+  var <- mean + mean**2 / dispersion
+  delta <- effect * sqrt(var)
+  new_mean <- max(mean + delta, 0)
+  test_val <- rnbinom(n = 1, size = dispersion, mu = new_mean)
+  ifelse(test_val > max, max, test_val)
+}
+```
+
+
+```{r}
+# set a bunch of params
+mean_nbin <- 3
+dispersion <- 1
+max_nbin <- 15
+
+child_adult_fx <- .4
+adult_fx <- 0
+child_fx <- .4
+age_fx <- .2
+age_adult_fx <- 0
+age_child_fx <- .2
+age_child_adult_fx <- .2
+
+sd_lab_intercept <- .2
+sd_lab_child_adult_fx <- .2
+sd_lab_adult_fx <- .1
+sd_lab_child_fx <- 0
+sd_lab_age_fx <- 0
+sd_lab_age_adult_fx <- 0
+sd_lab_age_child_fx <- 0
+sd_lab_age_child_adult_fx <- 0
+
+sd_child_intercept <- .2
+```
+
+
+```{r}
+setup_fixed_fx_only <- expand_grid(
+  site = 1:10, # 10 sites
+  kid = 1:16, # 16 kids / age / site
+  kid_age = c("younger", "older"), # 2 age bins
+  adult_did = c("adult_A", "adult_B"), # two behaviors
+  kid_did = c("kid_A", "kid_B"), # two behaviors
+) |>
+  mutate(kid = str_c("lab_", site, "_", kid_age, "_", kid)) |>
+  mutate(
+    adult_did_num = ifelse(adult_did == "adult_A", -.5, .5), # contrast code
+    kid_did_num = ifelse(kid_did == "kid_A", -.5, .5),
+    kid_age_num = ifelse(kid_age == "younger", -.5, .5)
+  ) |>
+  # use params above to set all the fixed effects
+  mutate(
+    main_effects = child_fx * kid_did_num +
+      adult_fx * adult_did_num +
+      child_adult_fx * kid_did_num * adult_did_num,
+    age_effects = age_fx * kid_age_num +
+      age_child_fx * kid_age_num * kid_did_num,
+    age_adult_fx * kid_age_num * adult_did_num,
+    age_child_adult_fx * kid_age_num * kid_did_num * adult_did_num,
+  )
+
+set.seed(1)
+setup_mixed_fx <- setup_fixed_fx_only |>
+  group_by(site) |>
+  # for each site, sample values for that lab
+  mutate(
+    lab_intercept = rnorm(n = 1, mean = 0, sd = sd_lab_intercept),
+    lab_child_adult_fx = rnorm(n = 1, mean = 0, sd = sd_lab_child_adult_fx),
+    lab_adult_fx = rnorm(n = 1, mean = 0, sd = sd_lab_adult_fx),
+    lab_child_fx = rnorm(n = 1, mean = 0, sd = sd_lab_child_fx),
+    lab_age_fx = rnorm(n = 1, mean = 0, sd = sd_lab_age_fx),
+    lab_age_adult_fx = rnorm(n = 1, mean = 0, sd = sd_lab_age_adult_fx),
+    lab_age_child_fx = rnorm(n = 1, mean = 0, sd = sd_lab_age_child_fx),
+    lab_age_child_adult_fx = rnorm(n = 1, mean = 0, sd = sd_lab_age_child_adult_fx)
+  ) |>
+  group_by(kid) |>
+  # for each child, sample values for that child
+  mutate(child_intercept = rnorm(n = 1, mean = 0, sd = sd_child_intercept)) |>
+  ungroup() |>
+  # add up the random effects
+  mutate(
+    random_effects = child_intercept +
+      lab_intercept +
+      lab_child_fx * kid_did_num +
+      lab_adult_fx * adult_did_num +
+      lab_child_adult_fx * kid_did_num * adult_did_num +
+      lab_age_fx * kid_age_num +
+      lab_age_child_fx * kid_age_num * kid_did_num,
+    lab_age_adult_fx * kid_age_num * adult_did_num,
+    lab_age_child_adult_fx * kid_age_num * kid_did_num * adult_did_num,
+    overall_effect = main_effects + age_effects + random_effects
+  )
+
+
+set.seed(1)
+sample_fixed_effects <- setup_fixed_fx_only |>
+  rowwise() |>
+  mutate(sample = sample_neg_binom(main_effects + age_effects, mean = mean_nbin, dispersion = dispersion, max = max_nbin))
+
+
+set.seed(1)
+sample_mixed_effects <- setup_mixed_fx |>
+  rowwise() |>
+  mutate(sample = sample_neg_binom(overall_effect, mean = mean_nbin, dispersion = dispersion, max = max_nbin))
+```
+
+## viz sampling with fixed effects only
+
+```{r}
+sample_fixed_effects |> ggplot(aes(x = sample)) +
+  geom_histogram(binwidth = 1) +
+  geom_vline(aes(xintercept = mean(sample)))
+
+sample_fixed_effects |>
+  group_by(adult_did, kid_did) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean)) +
+  facet_grid(adult_did ~ kid_did)
+
+sample_fixed_effects |>
+  group_by(adult_did, kid_did, kid_age) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = kid_age, fill = kid_age)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = kid_age)) +
+  facet_grid(adult_did ~ kid_did)
+
+sample_fixed_effects |>
+  group_by(adult_did, kid_did, kid_age) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = interaction(kid_did, adult_did), fill = interaction(kid_did, adult_did))) +
+  geom_density(position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = interaction(kid_did, adult_did))) +
+  facet_grid(~kid_age)
+
+sample_fixed_effects |>
+  mutate(match = str_sub(kid_did, -1, -1) == str_sub(adult_did, -1, -1)) |>
+  group_by(kid_age, match) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = match, fill = match)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = match)) +
+  facet_grid(~kid_age)
+```
+```{r}
+sample_fixed_effects |> ggplot(aes(x = reorder(site, sample), y = sample, color = kid_age)) +
+  geom_jitter(alpha = .1) +
+  stat_summary()
+
+sample_fixed_effects |> ggplot(aes(x = reorder(site, sample), y = sample, color = interaction(adult_did, kid_did))) +
+  geom_jitter(alpha = .1) +
+  stat_summary()
+
+sample_fixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
+  geom_jitter(alpha = .1) +
+  stat_summary(geom = "point") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), panel.grid = element_blank())
+```
+
+## viz sampling with mixed effects 
+
+```{r}
+sample_mixed_effects |> ggplot(aes(x = sample)) +
+  geom_histogram(binwidth = 1) +
+  geom_vline(aes(xintercept = mean(sample)))
+
+sample_mixed_effects |>
+  group_by(adult_did, kid_did) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean)) +
+  facet_grid(adult_did ~ kid_did)
+
+sample_mixed_effects |>
+  group_by(adult_did, kid_did, kid_age) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = kid_age, fill = kid_age)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = kid_age)) +
+  facet_grid(adult_did ~ kid_did)
+
+sample_mixed_effects |>
+  group_by(adult_did, kid_did, kid_age) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = interaction(kid_did, adult_did), fill = interaction(kid_did, adult_did))) +
+  geom_density(position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = interaction(kid_did, adult_did))) +
+  facet_grid(~kid_age)
+
+sample_mixed_effects |>
+  mutate(match = str_sub(kid_did, -1, -1) == str_sub(adult_did, -1, -1)) |>
+  group_by(kid_age, match) |>
+  mutate(mean = mean(sample)) |>
+  ggplot(aes(x = sample, color = match, fill = match)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = .3) +
+  geom_vline(aes(xintercept = mean, color = match)) +
+  facet_grid(~kid_age)
+```
+(look at random effects)
+
+```{r}
+sample_mixed_effects |> ggplot(aes(x = reorder(site, sample), y = sample, color = kid_age)) +
+  geom_jitter(alpha = .1) +
+  stat_summary()
+
+sample_mixed_effects |> ggplot(aes(x = reorder(site, sample), y = sample, color = interaction(adult_did, kid_did))) +
+  geom_jitter(alpha = .1) +
+  stat_summary()
+
+sample_mixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
+  geom_jitter(alpha = .1) +
+  stat_summary(geom = "point") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), panel.grid = element_blank())
+```
+
+## stats
+
+note: some models not represented here are
+
+* mixed effects models for each behavior separately
+
+* time data for mouth open mixed effect model (which would need separate simulation)
+
+### fixed effect model 
+
+```{r}
+fix_fx_mod <- MASS::glm.nb(sample ~ kid_age_num * adult_did_num * kid_did_num, data = sample_mixed_effects)
+
+summary(fix_fx_mod)
+```
+(reminder: "true" values
+
+* child_adult_fx = .4
+* adult_fx = 0
+* child_fx = .4
+* age_fx = .2
+* age_adult_fx=0
+* age_child_fx=.2
+* age_child_adult_fx=.2)
+
+### mixed effect model 
+
+note that there are some convergence issues, so we may need to decide which are the most important random slopes!
+
+```{r}
+# mix_fx_mod <- glmer.nb(sample~kid_age_num*adult_did_num*kid_did_num+
+#                          (1|kid)+
+#                          (kid_age_num*adult_did_num*kid_did_num|site), data=sample_mixed_effects)
+
+# ^ failed to converge
+
+mix_fx_mod <- glmer.nb(sample ~ kid_age_num * adult_did_num * kid_did_num +
+  (1 | kid) +
+  (adult_did_num | site), data = sample_mixed_effects)
+# get a singular fit, but at least it converged?
+summary(mix_fx_mod)
+```
+
+### chi-sq test
+
+unclear what the age approach here is...
+
+```{r}
+prep_chi_sq_data <- sample_mixed_effects |>
+  group_by(kid, kid_age) |>
+  mutate(condition = str_c(adult_did, "_", kid_did)) |>
+  select(kid, kid_age, condition, sample) |>
+  pivot_wider(names_from = condition, values_from = sample) |>
+  mutate(
+    A = case_when(
+      adult_A_kid_A > adult_B_kid_A ~ "more_A",
+      adult_A_kid_A == adult_B_kid_A ~ "equal_A",
+      adult_A_kid_A < adult_B_kid_A ~ "less_A"
+    ),
+    B = case_when(
+      adult_B_kid_B > adult_A_kid_B ~ "more_B",
+      adult_B_kid_B == adult_A_kid_B ~ "equal_B",
+      adult_B_kid_B < adult_A_kid_B ~ "less_B"
+    )
+  )
+```
+
+age as all together
+
+```{r}
+chi_sq_data <- prep_chi_sq_data |>
+  group_by(A, B) |>
+  tally()
+
+# overall goodness of fit test comparing to all equal
+# note there are objections because 0's are not as likely
+chisq.test(chi_sq_data$n, p = rep(1 / 9, 9))
+
+# both match versus both mismatch
+match_mismatch <- chi_sq_data |> filter(A == "more_A" & B == "more_B" | A == "less_A" & B == "less_B")
+
+# goodness of fit for match-match v mismatch-mismatch
+chisq.test(match_mismatch$n, p = c(.5, .5))
+```
+
+age as split and test each separately
+
+```{r}
+chi_sq_data_age <- prep_chi_sq_data |>
+  group_by(A, B, kid_age) |>
+  tally()
+
+# younger
+
+# overall goodness of fit test comparing to all equal
+# note there are objections because 0's are not as likely
+chisq.test(chi_sq_data_age |> filter(kid_age == "younger") |> pull(n), p = rep(1 / 9, 9))
+
+chisq.test(chi_sq_data_age |> filter(kid_age == "older") |> pull(n), p = rep(1 / 9, 9))
+
+# both match versus both mismatch
+match_mismatch_age <- chi_sq_data_age |> filter(A == "more_A" & B == "more_B" | A == "less_A" & B == "less_B")
+
+# goodness of fit for match-match v mismatch-mismatch
+chisq.test(match_mismatch_age |> filter(kid_age == "younger") |> pull(n), p = c(.5, .5))
+
+chisq.test(match_mismatch_age |> filter(kid_age == "older") |> pull(n), p = c(.5, .5))
+```
+
+
+### wilcoxon matched-pairs signed-rank test
+
+again, not clear what the intended age thing is, so try together & split 
+
+```{r}
+type_A <- sample_mixed_effects |>
+  filter(kid_did == "kid_A") |>
+  select(kid, kid_age, adult_did, sample) |>
+  pivot_wider(names_from = adult_did, values_from = sample)
+
+type_B <- sample_mixed_effects |>
+  filter(kid_did == "kid_B") |>
+  select(kid, kid_age, adult_did, sample) |>
+  pivot_wider(names_from = adult_did, values_from = sample)
+
+# within type-A, all ages
+wilcox.test(type_A$adult_A, type_A$adult_B, paired = T)
+
+# within type-A, younger only
+wilcox.test(type_A |> filter(kid_age == "younger") |> pull(adult_A), type_A |> filter(kid_age == "younger") |> pull(adult_B), paired = T)
+
+# within type-A, older only
+wilcox.test(type_A |> filter(kid_age == "older") |> pull(adult_A), type_A |> filter(kid_age == "older") |> pull(adult_B), paired = T)
+
+# within type-B, all ages
+wilcox.test(type_B$adult_A, type_A$adult_B, paired = T)
+
+# within type-B, younger only
+wilcox.test(type_B |> filter(kid_age == "younger") |> pull(adult_A), type_B |> filter(kid_age == "younger") |> pull(adult_B), paired = T)
+
+# within type-B, older only
+wilcox.test(type_B |> filter(kid_age == "older") |> pull(adult_A), type_A |> filter(kid_age == "older") |> pull(adult_B), paired = T)
+```
+
+# Future
+
+The above tried one sampling on one set of params.
+Once we have a sense of
+
+* what parameter ranges are relevant and
+* what outcomes are relevant (ex. significance on which tests)
+
+I can do power-analysis / aggregate across many simulations. 
+
+May want to check ex. ostenberg or davis meta-analysis to get ideas on # of actions/ unit time (mean & max plausible) and estimate of variance from different sources and estimates of simple effects (how common overall are MO v TP).
+
+Parameters:
+
+(experiment size)
+
+- number of labs: 10
+- number of infants / lab / age: 16
+
+(distributional)
+
+- mean: 3 
+- dispersion: 1 (looks kinda reasonable from above)
+- max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15) 
+
+(fixed effects, all in units of SD)
+
+* interaction (match/mismatch) effect: .4
+* simple effect (A > B for child): .4
+* simple effect (A > B for adult): 0
+* age main effect: .2
+* age x interaction: .2
+* age x simple effect: .2
+
+(random effects, all in units of SD)
+
+* sd of labs (intercept): .2
+* sd of labs (adult): .1
+* sd of labs (child): 0
+* sd of labs (adult x child): .2
+* sd of labs (age): 0
+* sd of labs (age x adult): 0
+* sd of labs (age x child): 0
+* sd of labs (age x adult x child): 0
+* sd of infants (intercept): .2
+
+
+
+<!--
+
+Older
+
+
+ostenberg study has a lot of data 
+
+* set up parameterized simulation of all the stuff 
+* set up functions to do the models we (might) care about
+
+step 1 -- 1 simulated dataset and run actual analysis and do all the pictures
+
+step 2 -- how do parameter variables effect effect outcomes (power, etc, etc)
+
+# simulating data
+
+Questions -- what should be the functional form of the distribution being simulated (poisson, neg binomial, zero-inflated?)
+
+poisson -- 1 parameter model (mean=var) <-- seems not ideal when 
+neg binomial -- 2 parameter model, mu=(r(1-p)/p), p (same as poisson for p=1) (parameterizations vary)
+
+I think neg binomial for sampling gives the most flexibility! to have mean and variance be different, should be able to accommodate things. 
+
+
+## how do mean and sd map to params for neg binom?
+
+mean = n(1-p)/p
+var = n(1-p)/p**2
+
+going to use the mu and size/dispersion param:
+var = mu + mu**2/disp
+
+
+note: this is assuming independence (which is how these were sampled), but doesn't take into account covariance!
+
+# What would I do?
+
+* overall mean (3ish)
+* dispersion (guess/ try a range of reasonable / pilot) (size parameter) (higher = more poisson-like)
+* d is determined by mean and (pooled) variance
+* lab sampling value
+* individual sampling value (this is to get the correlations / cov to work out)
+
+value = sample from neg_binom with mean = mean + effect + lab_var + indiv_var 
+
+so, given that the individual sampling, lab sampling, and d are all in units of sd (or could be), may be add those up and then do? 
+
+
+
+for different values of dispersion (keeping mean=3), what effect would get different correlations. 
+
+```{r, eval=F}
+test <- expand_grid(child = c(1:30), dispersion = c(1, 5, 10, 100), effect = c(.1, .2, .3, .4, .5), rep = 1:100) |>
+  group_by(dispersion, effect, rep) |>
+  nest() |>
+  mutate(result = map(data, \(d){
+    sample <- d |>
+      rowwise() |>
+      mutate(
+        child_delta = rnorm(n = 1, mean = 0, sd = effect),
+        sample_1 = sample_neg_binom(child_delta, mean = 3, dispersion = dispersion),
+        sample_2 = sample_neg_binom(child_delta, mean = 3, dispersion = dispersion)
+      )
+    cor.test(sample$sample_1, sample$sample_2, method = "spearman")$est
+  })) |>
+  select(-data) |>
+  unnest(result)
+
+
+test |> ggplot(aes(x = effect, y = result)) +
+  geom_point(alpha = .1) +
+  stat_summary() +
+  geom_hline(yintercept = .2, lty = "dashed") +
+  facet_wrap(~dispersion)
+```
+so if we think the correlation between two of the counts should get a spearman's rho of .2 then we think the sd of the kiddo distribution should be like .4-.5 (in standardized units)
+
+and if we think the by-site variation is like .25 standardized units, we can start figuring this out...
+
+```{r, eval=F}
+library(lme4)
+library(broom.mixed)
+
+test <- expand_grid(
+  sites = c(10), # how many sites (this is the "power" part)
+  dispersion = c(10), # we don't know what dispersion will be, so try something for now -- will want to try other options for some robustness
+  effect_size = c(.2), # in standardized units, what is match vs mismatch effect (interaction)
+  site_sd = .25, # in standardized units, how variable are sites
+  child_sd = .5, # in standardized units, how variable are child (correlation across 4 measures, but expressed this way)
+  rep = 1:2 # increase later for testing
+) |>
+  group_by(dispersion, effect_size, rep, sites) |> # we want a power for each of these groups
+  nest() |>
+  mutate(result = map(data, \(d){
+    sim <- d |>
+      expand_grid(site_id = 1:sites) |>
+      rowwise() |> # generate simulated sites
+      mutate(site_delta = rnorm(n = 1, mean = 0, sd = site_sd)) |>
+      expand_grid(participant_id = c(1:32)) |> # generate simulated kiddos
+      # what is actual kid/site / age?? counts??
+      rowwise() |>
+      mutate(child_delta = rnorm(n = 1, mean = 0, sd = child_sd)) |>
+      expand_grid(adult_did = c("A", "B"), child_did = c("A", "B")) |> # generate simulated conditions
+      rowwise() |>
+      mutate(
+        effect = ifelse(adult_did == child_did, effect_size / 2, -effect_size / 2),
+        sample = sample_neg_binom(child_delta + site_delta + effect, mean = 3, dispersion = dispersion)
+      )
+
+    glmer.nb(sample ~ adult_did * child_did + (1 | site_id / participant_id), data = sim) |> tidy()
+    # age???
+    # should figure out what we actually want and pre-pull
+    # do we want more ranef here??? note that we aren't building in any true slopes?
+  })) |>
+  select(-data) |>
+  unnest(result)
+
+
+test |> filter(effect == "fixed")
+```
+
+# Questions for Mike
+
+* age -- how is age getting incorporated?
+ options:
+  * separate models for younger & older (potential interpretation/multiple test issues)
+  * as interaction effect in one model (adult_beh * infant_beh * age) (probably this one)
+
+* so, what's the model we want to use (at least for power analysis) (age, and random slopes)
+* 1|kid + (adult * infant | site) 
+
+* distributional assumptions -- the more (apparently) zero inflated neg-binomials have some really long tails. do we want to windsorize to something reasonable (max observed in 90 seconds? 15 if 3 is avg?)
+
+* parameter selections: we need to choose values (or ranges) to test
+
+(distributional)
+- (grand) mean: 3 (from supposed prior work, should also check robustness after)
+- dispersion: ??? (definitely check multiple values here)
+- max value (mostly matters for low values on dispersion parameter): 
+
+(fixed effects)
+* interaction (match/mismatch) effect (in units of cohen's d): .2, .3, .4
+* simple effect (A > B): 0 (but should def do robustness checks with other numbers on some range) (check davis meta analysis 2001, for range of plausibility) one might occur up to 2x as often 
+* effect of age (and interaction with age)
+
+(random effects)
+* sd of lab distribution (in units of cohen's d): .25 (????)
+* sd of infant effects (from correlation of some infants just do more things, but in units of cohen's d): ???
+* lab specific slopes
+
+ostenberg study has a lot of data 
+
+* set up parameterized simulation of all the stuff 
+* set up functions to do the models we (might) care about
+
+step 1 -- 1 simulated dataset and run actual analysis and do all the pictures
+
+step 2 -- how do parameter variables effect effect outcomes (power, etc, etc)
 
 
 # Notes from reading MS on analytic design
@@ -70,173 +732,4 @@ Models:
 * time data mouth (adult_beh)
 * chi-square test (???)
 * wilcoxon test
-
-# simulating data
-
-Questions -- what should be the functional form of the distribution being simulated (poisson, neg binomial, zero-inflated?)
-
-poisson -- 1 parameter model (mean=var) <-- seems not ideal when 
-neg binomial -- 2 parameter model, mu=(r(1-p)/p), p (same as poisson for p=1) (parameterizations vary)
-
-I think neg binomial for sampling gives the most flexibility! to have mean and variance be different, should be able to accommodate things. 
-
-
-## how do mean and sd map to params for neg binom?
-
-mean = n(1-p)/p
-var = n(1-p)/p**2
-
-going to use the mu and size/dispersion param:
-var = mu + mu**2/disp
-
-```{r}
-sample <- expand_grid(mean=c(3), dispersion=c(.5, 1,5, 10,100), d=c(.2, .3, .4)) |> 
-  mutate(dat = pmap(list(mean, dispersion, d), \(m,disp,d) {
-     var=m + m**2/disp
-     sd=sqrt(var)
-    delta=.5*d*sqrt(var)
-    m_lower=m-delta
-    dat_1=rnbinom(10000, size=disp, mu=m_lower)
-    m_upper=m+delta
-    dat_2=rnbinom(10000, size=disp, mu=m_upper)
-    tibble(dat=dat_1, type="lower") |> bind_rows(tibble(dat=dat_2, type="upper")) |> mutate(sd=sd)
-  })) |> unnest(dat)
-```
-
-
-### what do different dispersions look like?
-
-```{r}
-sample |> 
-  ggplot(aes(x=dat, fill=type))+geom_histogram(binwidth = 1,alpha=.5, position=position_identity())+facet_grid(dispersion~d) +coord_cartesian(xlim=c(0,20))
-```
-
-
-### are we accurate about the cohen's d?
-```{r}
-
-check <- sample |> group_by(type, dispersion, d, sd) |> summarize(m_calc=mean(dat), sd_calc=sd(dat)) |> 
-  pivot_wider(names_from=type, values_from=c(m_calc, sd_calc)) |> 
-  mutate(pooled_sd=sqrt((sd_calc_lower**2+sd_calc_upper**2)/2),
-         d_calc=(m_calc_upper-m_calc_lower)/pooled_sd)
-
-check |> ggplot(aes(x=d, y=d_calc, color=as.character(dispersion)))+geom_point()+geom_abline()
-
-```
-
-note: this is assuming independence (which is how these were sampled), but doesn't take into account covariance!
-
-# What would I do?
-
-* overall mean (3ish)
-* dispersion (guess/ try a range of reasonable / pilot) (size parameter) (higher = more poisson-like)
-* d is determined by mean and (pooled) variance
-* lab sampling value
-* individual sampling value (this is to get the correlations / cov to work out)
-
-value = sample from neg_binom with mean = mean + effect + lab_var + indiv_var 
-
-so, given that the individual sampling, lab sampling, and d are all in units of sd (or could be), may be add those up and then do? 
-
-```{r}
-sample_neg_binom=function(effect, mean, dispersion){
-  var=mean + mean**2/dispersion
-  delta=effect*sqrt(var)
-  new_mean=mean+delta
-  rnbinom(n=1, size=dispersion, mu=new_mean)
-  
-}
-```
-
-for different values of dispersion (keeping mean=3), what effect would get different correlations. 
-
-```{r}
-
-test <- expand_grid(child=c(1:30), dispersion=c(1,5,10,100), effect=c(.1, .2, .3, .4, .5), rep=1:100) |> 
-  group_by(dispersion, effect, rep) |> 
-  nest() |> 
-  mutate(result=map(data, \(d){
-    sample <- d |> 
-      rowwise() |> 
-    mutate(child_delta=rnorm(n=1, mean=0, sd=effect),
-           sample_1=sample_neg_binom(child_delta, mean=3, dispersion=dispersion),
-           sample_2=sample_neg_binom(child_delta, mean=3, dispersion=dispersion))
-    cor.test(sample$sample_1, sample$sample_2, method="spearman")$est
-  })) |> 
-  select(-data) |> 
-  unnest(result)
-
-
-test |> ggplot(aes(x=effect, y=result))+geom_point(alpha=.1)+stat_summary()+geom_hline(yintercept=.2, lty="dashed")+facet_wrap(~dispersion)
-
-```
-so if we think the correlation between two of the counts should get a spearman's rho of .2 then we think the sd of the kiddo distribution should be like .4-.5 (in standardized units)
-
-and if we think the by-site variation is like .25 standardized units, we can start figuring this out...
-
-```{r}
-library(lme4)
-library(broom.mixed)
-
-test <- expand_grid(sites=c(10), #how many sites (this is the "power" part)
-                    dispersion=c(10), # we don't know what dispersion will be, so try something for now -- will want to try other options for some robustness
-                    effect_size=c(.2), # in standardized units, what is match vs mismatch effect (interaction)
-                    site_sd=.25, #in standardized units, how variable are sites
-                    child_sd=.5, #in standardized units, how variable are child (correlation across 4 measures, but expressed this way)
-                    rep=1:2 #increase later for testing
-                    ) |> 
-  group_by(dispersion, effect_size, rep, sites) |> #we want a power for each of these groups
-  nest() |> 
-  mutate(result=map(data, \(d){
-    sim<- d |> expand_grid(site_id=1:sites) |> rowwise() |> #generate simulated sites
-      mutate(site_delta=rnorm(n=1, mean=0, sd=site_sd)) |> 
-      expand_grid(participant_id=c(1:32)) |> #generate simulated kiddos
-      #what is actual kid/site / age?? counts??
-      rowwise() |> 
-    mutate(child_delta=rnorm(n=1, mean=0, sd=child_sd)) |> 
-      expand_grid(adult_did=c("A","B"), child_did=c("A","B")) |> #generate simulated conditions
-      rowwise() |> 
-      mutate(effect=ifelse(adult_did==child_did, effect_size/2, -effect_size/2),
-           sample=sample_neg_binom(child_delta+site_delta+effect, mean=3, dispersion=dispersion))
-    
-        glmer.nb(sample~adult_did*child_did+(1|site_id/participant_id), data=sim) |> tidy()
-        # age???
-        # should figure out what we actually want and pre-pull
-        # do we want more ranef here??? note that we aren't building in any true slopes?
-  })) |> 
-  select(-data) |> 
-  unnest(result)
-
-
-test |> filter(effect=="fixed")
-```
-
-# Questions for Mike
-
-* age -- how is age getting incorporated?
- options:
-  * separate models for younger & older (potential interpretation/multiple test issues)
-  * as interaction effect in one model (adult_beh*infant_beh*age)
-
-* so, what's the model we want to use (at least for power analysis) (age, and random slopes)
-
-
-* distributional assumptions -- the more (apparently) zero inflated neg-binomials have some really long tails. do we want to windsorize to something reasonable (max observed in 90 seconds? 15 if 3 is avg?)
-
-* parameter selections: we need to choose values (or ranges) to test
-
-(distributional)
-- (grand) mean: 3 (from supposed prior work, should also check robustness after)
-- dispersion: ??? (definitely check multiple values here)
-- max value (mostly matters for low values on dispersion parameter): 
-
-(fixed effects)
-* interaction (match/mismatch) effect (in units of cohen's d): .2, .3, .4
-* simple effect (A > B): 0 (but should def do robustness checks with other numbers on some range)
-* effect of age (and interaction with age)
-
-(random effects)
-* sd of lab distribution (in units of cohen's d): .25 (????)
-* sd of infant effects (from correlation of some infants just do more things, but in units of cohen's d): ???
-* lab or infant specific slopes ??? <-- idk if we want to include these or not
-
+-->
