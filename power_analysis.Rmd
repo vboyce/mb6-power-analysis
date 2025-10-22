@@ -1,0 +1,216 @@
+---
+title: "mb6-power-analysis"
+format: html
+editor: visual
+---
+
+Simulations of data for MB6 project
+
+The annotated R code with variable explanations is saved in the folder of "Annotated R code"
+It has one of the simulation programs with variables etc. explained. 
+
+The folder of "Each_Rprogram_per_effectsize_labsize contains the separate programs ran for each setting listed in the tables and text of the Registered Report. For example, one program simulates the data for a Cohen's d = .20 (variable label as csd in program text and program filename for a project with 6 participating labs). 
+
+Preliminary analyses not included in this folder established that varying the rho values in the program (.20 vs .40) did not subtantively change the results of the simulations. There preliminary power analyses are not in the folder for R code but could be easily run again by changing the simrho value in program (at lines for variable setup). 
+
+The folder of "Simulated_data_results" contains the saved output (saved via matrices) from the 1000 simulations as a function of Effect size x Lab size.
+
+# Notes on analytic design
+
+w/i ss (tongue protusion & mouth opening) each of tongue and mouth has 3x (gesture + passive), but I think we're going over the whole time period (so 2 trials/infant, 2-3 measures per trial)
+
+* number of tongue protrusions 
+* number of mouth open 
+* time w/ mouth open 
+
+count data is likely to be positive skewed & zero inflated
+
+multilevel regression to account for "design factors" as well as chi-squre goodness of fit and Wilcoxon matched-paired signed-rank tests
+
+random intercepts for infant & lab (nested, but will do separate if there are convergence issues)
+
+"systematically add to base model one random slope fx per model" (VB: this seems hella weird as an approach -- they should pick the maximal relevant thing and stick with it. Also probably go Bayesian for backup that won't have convergence issues.)
+
+VB note: shouldn't infant age go into the models somehow, especially given the 2 age category design??
+
+fixed fx: adult_demonstration , infant_response and their interaction 
+
+^ this only works for the frequency based ones! like this has to be count/count (but elsewhere it said that time was also going to be used for mouth open)
+
+effect coding (+1 tongue, -1 mouth) (VB thinks +.5/ -.5 would be better for magnitude interpretation )
+
+statistical assumptions of distribution -- count data is poisson or neg binomial (and perhaps zero inflated)
+paper suggests data transformations and z-scores (VB thinks is bad idea)
+
+planned comparisons about DV ~ adult_behavior 
+for DV -- # mouth, # tongue, amount of mouth 
+
+chi-sq count data on more or less in each table; there's argument over what the null is because there's 0/0 stuff. 
+
+wilcoxon matched-pairs signed-rank test
+One Wilcoxon test will assess whether infants produce significantly more tongue protrusion responses to the adult tongue-protrusion display than to the adult mouth-opening display; and a second Wilcoxon test will assess whether infants produce significantly more mouth opening responses to the adult mouth-opening display than to the adult tongue-protrusion display. 
+
+if we do neg binomial would we log-link?
+
+# power analysis notes from paper
+goal is 95% power at alpha=.05
+
+1000 reps each 
+
+simulating from a poisson:
+* expected effect size (d={.2, .3, .4}) (had citations)
+* intra-correlations between infant tongue and infant mouth opening responses (.2 or .4) (had citations)
+* lab to lab variation (SD = .25) <- where does this come from 
+  * 6 or 10 labs
+  * assume lab sample with N=32 for one age 
+  * but there are also plans to do potential "half-sample" as well. 
+  
+Models:
+* count data (adult_beh x infant_beh)
+* count data tongue (adult_beh)
+* count data mouth (adult_beh)
+* time data mouth (adult_beh)
+* chi-square test (???)
+* wilcoxon test
+
+# simulating data
+
+Questions -- what should be the functional form of the distribution being simulated (poisson, neg binomial, zero-inflated?)
+
+poisson -- 1 parameter model (mean=var) <-- seems not ideal when 
+neg binomial -- 2 parameter model, mu=(r(1-p)/p), p (same as poisson for p=1) (parameterizations vary)
+
+I think neg binomial for sampling gives the most flexibility! to have mean and variance be different, should be able to accommodate things. 
+
+
+# how do mean and sd map to params for neg binom?
+
+mean = n(1-p)/p
+var = n(1-p)/p**2
+
+```{r}
+expand_grid(mean=c(2.5, 3), std=c(1.74, 2, 3, 4)) |>  
+  mutate(dat = pmap(list(mean, std), \(m,std) {
+    var=std**2
+    p=m/var
+    size=m*p/(1-p)
+    dat=rnbinom(1000, size=size, p=p)
+    tibble(var=var, p=p, size=size, obs_m=mean(dat), obs_sd=sd(dat))
+  })) |> unnest(dat)
+
+
+# so if we wanted to see what a d=.2 difference could look like, we want the difference       
+
+theme_set(theme_bw())
+
+sample <- expand_grid(mean=c(3), std=c(2, 3, 4), d=c(.2, .3, .4)) |>  
+  mutate(dat = pmap(list(mean, std, d), \(m,std,d) {
+    diff=d*std/2
+    var=std**2
+    m_lower=m-diff
+    p=m_lower/var
+    size=m_lower*p/(1-p)
+    dat_1=rnbinom(1000, size=size, p=p)
+    m_upper=m+diff
+    p=m_upper/var
+    size=m_upper*p/(1-p)
+    dat_2=rnbinom(1000, size=size, p=p)
+    tibble(dat=dat_1, type="lower") |> bind_rows(tibble(dat=dat_2, type="upper"))
+  })) |> unnest(dat) 
+
+sample |> 
+  ggplot(aes(x=dat, fill=type))+geom_histogram(binwidth = 1,alpha=.5, position=position_identity())+facet_grid(std~d)
+
+library(broom)
+sample |> group_by(std, d) |> nest() |> 
+  mutate(coeff = map(data, \(d){MASS::glm.nb(dat~type, data=d) |> tidy()})) |> 
+  unnest(coeff)
+```
+notes -- probably in real life data mean and variance are correlated (so distributions with lower means also have lower variance), but not sure how much to correlate them?
+
+would still need to add grouping level factors (and thus deal with cov) 
+
+# What would I do?
+
+* overall mean (3ish)
+* dispersion (guess/ try a range of reasonable / pilot) (size parameter) (higher = more poisson-like)
+* d is determined by mean and (pooled) variance
+* lab sampling value
+* individual sampling value (this is to get the correlations / cov to work out)
+
+value = sample from neg_binom with mean = mean + effect + lab_var + indiv_var 
+
+so, given that the individual sampling, lab sampling, and d are all in units of sd (or could be), may be add those up and then do? 
+
+```{r}
+sample_neg_binom=function(effect, mean, dispersion){
+  var=mean + mean**2/dispersion
+  delta=effect*sqrt(var)
+  new_mean=mean+delta
+  rnbinom(n=1, size=dispersion, mu=new_mean)
+}
+```
+
+for different values of dispersion (keeping mean=3), what effect would get different correlations. 
+
+```{r}
+
+test <- expand_grid(child=c(1:30), dispersion=c(1,5,10,100), effect=c(.1, .2, .3, .4, .5), rep=1:100) |> 
+  group_by(dispersion, effect, rep) |> 
+  nest() |> 
+  mutate(result=map(data, \(d){
+    sample <- d |> 
+      rowwise() |> 
+    mutate(child_delta=rnorm(n=1, mean=0, sd=effect),
+           sample_1=sample_neg_binom(child_delta, mean=3, dispersion=dispersion),
+           sample_2=sample_neg_binom(child_delta, mean=3, dispersion=dispersion))
+    cor.test(sample$sample_1, sample$sample_2, method="spearman")$est
+  })) |> 
+  select(-data) |> 
+  unnest(result)
+
+
+test |> ggplot(aes(x=effect, y=result))+geom_point(alpha=.1)+stat_summary()+geom_hline(yintercept=.2, lty="dashed")+facet_wrap(~dispersion)
+
+```
+so if we think the correlation between two of the counts should get a spearman's rho of .2 then we think the sd of the kiddo distribution should be like .4-.5 (in standardized units)
+
+and if we think the by-site variation is like .25 standardized units, we can start figuring this out...
+
+```{r}
+library(lme4)
+library(broom.mixed)
+
+test <- expand_grid(sites=c(10), #how many sites (this is the "power" part)
+                    dispersion=c(10), # we don't know what dispersion will be, so try something for now -- will want to try other options for some robustness
+                    effect_size=c(.2), # in standardized units, what is match vs mismatch effect (interaction)
+                    site_sd=.25, #in standardized units, how variable are sites
+                    child_sd=.5, #in standardized units, how variable are child (correlation across 4 measures, but expressed this way)
+                    rep=1:2 #increase later for testing
+                    ) |> 
+  group_by(dispersion, effect_size, rep, sites) |> #we want a power for each of these groups
+  nest() |> 
+  mutate(result=map(data, \(d){
+    sim<- d |> expand_grid(site_id=1:sites) |> rowwise() |> #generate simulated sites
+      mutate(site_delta=rnorm(n=1, mean=0, sd=site_sd)) |> 
+      expand_grid(participant_id=c(1:32)) |> #generate simulated kiddos
+      #what is actual kid/site / age?? counts??
+      rowwise() |> 
+    mutate(child_delta=rnorm(n=1, mean=0, sd=child_sd)) |> 
+      expand_grid(adult_did=c("A","B"), child_did=c("A","B")) |> #generate simulated conditions
+      rowwise() |> 
+      mutate(effect=ifelse(adult_did==child_did, effect_size/2, -effect_size/2),
+           sample=sample_neg_binom(child_delta+site_delta+effect, mean=3, dispersion=dispersion))
+    
+        glmer.nb(sample~adult_did*child_did+(1|site_id/participant_id), data=sim) |> tidy()
+        # age???
+        # should figure out what we actually want and pre-pull
+        # do we want more ranef here??? note that we aren't building in any true slopes?
+  })) |> 
+  select(-data) |> 
+  unnest(result)
+
+
+test |> filter(effect=="fixed")
+```
+
