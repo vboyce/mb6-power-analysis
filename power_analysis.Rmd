@@ -4,18 +4,16 @@ format: html
 editor: visual
 ---
 
-Simulations of data for MB6 project
+```{r}
+library(tidyverse)
+library(broom)
+library(lme4)
+library(broom.mixed)
+theme_set(theme_bw())
+```
 
-The annotated R code with variable explanations is saved in the folder of "Annotated R code"
-It has one of the simulation programs with variables etc. explained. 
 
-The folder of "Each_Rprogram_per_effectsize_labsize contains the separate programs ran for each setting listed in the tables and text of the Registered Report. For example, one program simulates the data for a Cohen's d = .20 (variable label as csd in program text and program filename for a project with 6 participating labs). 
-
-Preliminary analyses not included in this folder established that varying the rho values in the program (.20 vs .40) did not subtantively change the results of the simulations. There preliminary power analyses are not in the folder for R code but could be easily run again by changing the simrho value in program (at lines for variable setup). 
-
-The folder of "Simulated_data_results" contains the saved output (saved via matrices) from the 1000 simulations as a function of Effect size x Lab size.
-
-# Notes on analytic design
+# Notes from reading MS on analytic design
 
 w/i ss (tongue protusion & mouth opening) each of tongue and mouth has 3x (gesture + passive), but I think we're going over the whole time period (so 2 trials/infant, 2-3 measures per trial)
 
@@ -27,7 +25,7 @@ count data is likely to be positive skewed & zero inflated
 
 multilevel regression to account for "design factors" as well as chi-squre goodness of fit and Wilcoxon matched-paired signed-rank tests
 
-random intercepts for infant & lab (nested, but will do separate if there are convergence issues)
+random intercepts for infant & lab (nested, but will do separate if there are convergence issues) (VB note: nested here is just notational -- the nesting is a property of the data not of the model; the nesting notation only matters if you didn't uniqueify your subject labels between labs)
 
 "systematically add to base model one random slope fx per model" (VB: this seems hella weird as an approach -- they should pick the maximal relevant thing and stick with it. Also probably go Bayesian for backup that won't have convergence issues.)
 
@@ -52,7 +50,7 @@ One Wilcoxon test will assess whether infants produce significantly more tongue 
 
 if we do neg binomial would we log-link?
 
-# power analysis notes from paper
+# Notes from MS on  power analysis
 goal is 95% power at alpha=.05
 
 1000 reps each 
@@ -83,52 +81,50 @@ neg binomial -- 2 parameter model, mu=(r(1-p)/p), p (same as poisson for p=1) (p
 I think neg binomial for sampling gives the most flexibility! to have mean and variance be different, should be able to accommodate things. 
 
 
-# how do mean and sd map to params for neg binom?
+## how do mean and sd map to params for neg binom?
 
 mean = n(1-p)/p
 var = n(1-p)/p**2
 
+going to use the mu and size/dispersion param:
+var = mu + mu**2/disp
+
 ```{r}
-expand_grid(mean=c(2.5, 3), std=c(1.74, 2, 3, 4)) |>  
-  mutate(dat = pmap(list(mean, std), \(m,std) {
-    var=std**2
-    p=m/var
-    size=m*p/(1-p)
-    dat=rnbinom(1000, size=size, p=p)
-    tibble(var=var, p=p, size=size, obs_m=mean(dat), obs_sd=sd(dat))
+sample <- expand_grid(mean=c(3), dispersion=c(.5, 1,5, 10,100), d=c(.2, .3, .4)) |> 
+  mutate(dat = pmap(list(mean, dispersion, d), \(m,disp,d) {
+     var=m + m**2/disp
+     sd=sqrt(var)
+    delta=.5*d*sqrt(var)
+    m_lower=m-delta
+    dat_1=rnbinom(10000, size=disp, mu=m_lower)
+    m_upper=m+delta
+    dat_2=rnbinom(10000, size=disp, mu=m_upper)
+    tibble(dat=dat_1, type="lower") |> bind_rows(tibble(dat=dat_2, type="upper")) |> mutate(sd=sd)
   })) |> unnest(dat)
-
-
-# so if we wanted to see what a d=.2 difference could look like, we want the difference       
-
-theme_set(theme_bw())
-
-sample <- expand_grid(mean=c(3), std=c(2, 3, 4), d=c(.2, .3, .4)) |>  
-  mutate(dat = pmap(list(mean, std, d), \(m,std,d) {
-    diff=d*std/2
-    var=std**2
-    m_lower=m-diff
-    p=m_lower/var
-    size=m_lower*p/(1-p)
-    dat_1=rnbinom(1000, size=size, p=p)
-    m_upper=m+diff
-    p=m_upper/var
-    size=m_upper*p/(1-p)
-    dat_2=rnbinom(1000, size=size, p=p)
-    tibble(dat=dat_1, type="lower") |> bind_rows(tibble(dat=dat_2, type="upper"))
-  })) |> unnest(dat) 
-
-sample |> 
-  ggplot(aes(x=dat, fill=type))+geom_histogram(binwidth = 1,alpha=.5, position=position_identity())+facet_grid(std~d)
-
-library(broom)
-sample |> group_by(std, d) |> nest() |> 
-  mutate(coeff = map(data, \(d){MASS::glm.nb(dat~type, data=d) |> tidy()})) |> 
-  unnest(coeff)
 ```
-notes -- probably in real life data mean and variance are correlated (so distributions with lower means also have lower variance), but not sure how much to correlate them?
 
-would still need to add grouping level factors (and thus deal with cov) 
+
+### what do different dispersions look like?
+
+```{r}
+sample |> 
+  ggplot(aes(x=dat, fill=type))+geom_histogram(binwidth = 1,alpha=.5, position=position_identity())+facet_grid(dispersion~d) +coord_cartesian(xlim=c(0,20))
+```
+
+
+### are we accurate about the cohen's d?
+```{r}
+
+check <- sample |> group_by(type, dispersion, d, sd) |> summarize(m_calc=mean(dat), sd_calc=sd(dat)) |> 
+  pivot_wider(names_from=type, values_from=c(m_calc, sd_calc)) |> 
+  mutate(pooled_sd=sqrt((sd_calc_lower**2+sd_calc_upper**2)/2),
+         d_calc=(m_calc_upper-m_calc_lower)/pooled_sd)
+
+check |> ggplot(aes(x=d, y=d_calc, color=as.character(dispersion)))+geom_point()+geom_abline()
+
+```
+
+note: this is assuming independence (which is how these were sampled), but doesn't take into account covariance!
 
 # What would I do?
 
@@ -148,6 +144,7 @@ sample_neg_binom=function(effect, mean, dispersion){
   delta=effect*sqrt(var)
   new_mean=mean+delta
   rnbinom(n=1, size=dispersion, mu=new_mean)
+  
 }
 ```
 
@@ -213,4 +210,33 @@ test <- expand_grid(sites=c(10), #how many sites (this is the "power" part)
 
 test |> filter(effect=="fixed")
 ```
+
+# Questions for Mike
+
+* age -- how is age getting incorporated?
+ options:
+  * separate models for younger & older (potential interpretation/multiple test issues)
+  * as interaction effect in one model (adult_beh*infant_beh*age)
+
+* so, what's the model we want to use (at least for power analysis) (age, and random slopes)
+
+
+* distributional assumptions -- the more (apparently) zero inflated neg-binomials have some really long tails. do we want to windsorize to something reasonable (max observed in 90 seconds? 15 if 3 is avg?)
+
+* parameter selections: we need to choose values (or ranges) to test
+
+(distributional)
+- (grand) mean: 3 (from supposed prior work, should also check robustness after)
+- dispersion: ??? (definitely check multiple values here)
+- max value (mostly matters for low values on dispersion parameter): 
+
+(fixed effects)
+* interaction (match/mismatch) effect (in units of cohen's d): .2, .3, .4
+* simple effect (A > B): 0 (but should def do robustness checks with other numbers on some range)
+* effect of age (and interaction with age)
+
+(random effects)
+* sd of lab distribution (in units of cohen's d): .25 (????)
+* sd of infant effects (from correlation of some infants just do more things, but in units of cohen's d): ???
+* lab or infant specific slopes ??? <-- idk if we want to include these or not
 
