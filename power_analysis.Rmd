@@ -1,6 +1,11 @@
 ---
 title: "mb6-power-analysis"
-format: html
+format: 
+  html:
+    toc: true
+    toc-location: body
+    toc-depth: 3
+    toc-expand: 3
 editor: visual
 ---
 
@@ -10,6 +15,87 @@ library(broom)
 library(lme4)
 library(broom.mixed)
 theme_set(theme_bw())
+```
+
+# Different interaction profiles
+
+```{r, fig.width=3, fig.height=2}
+null_effect <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 5,
+  "MO", "TP", 3,
+  "MO", "MO", 3
+)
+
+prefer_TP <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 3,
+  "MO", "TP", 3,
+  "MO", "MO", 2
+)
+
+arousal <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 3,
+  "MO", "TP", 2,
+  "MO", "MO", 2
+)
+
+arousal_2 <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 3,
+  "MO", "TP", 4,
+  "MO", "MO", 4
+)
+
+match_1 <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 3,
+  "MO", "TP", 3,
+  "MO", "MO", 5
+)
+
+match_2 <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 5,
+  "TP", "MO", 4,
+  "MO", "TP", 1,
+  "MO", "MO", 3
+)
+
+mismatch <- tribble(
+  ~kid, ~adult, ~value,
+  "TP", "TP", 3,
+  "TP", "MO", 5,
+  "MO", "TP", 5,
+  "MO", "MO", 3
+)
+null_effect |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+prefer_TP |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+arousal |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+arousal_2|> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+match_1 |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+match_2 |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
+mismatch |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(group=c(kid)))+
+  coord_cartesian(ylim=c(0,6))
+
 ```
 # What does neg-binomial look like
 
@@ -32,6 +118,14 @@ sample <- expand_grid(mean = c(3), dispersion = c(.5, 1, 5, 10, 100), d = c(.2, 
       mutate(sd = sd)
   })) |>
   unnest(dat)
+
+
+sample_2 <- expand_grid(mean = c(1,3,9), dispersion = c(.5, 1, 10, 100)) |>
+  mutate(dat = pmap(list(mean, dispersion), \(m, disp) {
+    dat <- rnbinom(10000, size = disp, mu = m)
+    tibble(dat = dat)
+  })) |>
+  unnest(dat)
 ```
 
 here's an example of what these distributions look like for different cohen's d, assuming mean of 3 and trying different dispersion values. 
@@ -42,6 +136,14 @@ sample |>
   geom_histogram(binwidth = 1, alpha = .5, position = position_identity()) +
   facet_grid(dispersion ~ d) +
   coord_cartesian(xlim = c(0, 20))
+
+sample_2 |>
+  ggplot(aes(x = dat)) +
+  geom_histogram(binwidth = 1, alpha = .5, position = position_identity()) +
+  facet_grid(str_c("mean=",mean)~str_c("dispersion=",dispersion)) +
+  coord_cartesian(xlim = c(0, 20))+
+  labs(x="Number of events", y="")+theme(axis.title.y=element_blank(), axis.ticks.y=element_blank(),
+                                         axis.text.y=element_blank())
 ```
 
 also, as a check, we can recover roughly the same cohen's d (using the normal calculation method for pooling sd, but we're at least ballpark okay). This does assume independence. 
@@ -211,7 +313,7 @@ sample_mixed_effects <- setup_mixed_fx |>
   mutate(sample = sample_neg_binom(overall_effect, mean = mean_nbin, dispersion = dispersion, max = max_nbin))
 ```
 
-## viz sampling with fixed effects only
+# viz sampling with fixed effects only
 
 ```{r}
 sample_fixed_effects |> ggplot(aes(x = sample)) +
@@ -266,7 +368,7 @@ sample_fixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), panel.grid = element_blank())
 ```
 
-## viz sampling with mixed effects 
+# viz sampling with mixed effects 
 
 ```{r}
 sample_mixed_effects |> ggplot(aes(x = sample)) +
@@ -323,7 +425,7 @@ sample_mixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), panel.grid = element_blank())
 ```
 
-## stats
+# stats
 
 note: some models not represented here are
 
@@ -364,8 +466,34 @@ mix_fx_mod <- glmer.nb(sample ~ kid_age_num * adult_did_num * kid_did_num +
   (adult_did_num | site), data = sample_mixed_effects)
 # get a singular fit, but at least it converged?
 summary(mix_fx_mod)
+
+library(emmeans)
+
+EMM <- emmeans(mix_fx_mod, ~adult_did_num*kid_did_num)
+
+pairs(EMM, by="kid_did_num")
+```
+this seems to get reversed sign, but consistent values with the individual version, so we could skip the individual versions and just use the emmeans to get the two halves out. 
+
+### individual mixed effects models
+
+A is coded negative, so a negative coefficient on adult_did_num is supportive of imitation
+```{r}
+mix_fx_mod_A <- glmer.nb(sample ~ kid_age_num * adult_did_num +
+  (1 | kid) + (adult_did_num | site), data = sample_mixed_effects |> filter(kid_did=="kid_A"))
+
+summary(mix_fx_mod_A)
 ```
 
+
+B is coded positive, so a positive coefficient on adult_did_num is supportive of imitation
+
+```{r}
+mix_fx_mod_B <- glmer.nb(sample ~ kid_age_num * adult_did_num +
+  (1 | kid) + (adult_did_num | site), data = sample_mixed_effects |> filter(kid_did=="kid_B"))
+
+summary(mix_fx_mod_B)
+```
 ### chi-sq test
 
 unclear what the age approach here is...
@@ -467,17 +595,76 @@ wilcox.test(type_B |> filter(kid_age == "younger") |> pull(adult_A), type_B |> f
 wilcox.test(type_B |> filter(kid_age == "older") |> pull(adult_A), type_A |> filter(kid_age == "older") |> pull(adult_B), paired = T)
 ```
 
+### what are priors for neg binomial
+
+```{r}
+library(brms)
+
+prior=c("normal(1,1)", class="Intercept",
+        "normal(0,1)", class="b",
+        "normal(0,1)", class="sd",
+        "lkj(1)", class="cor",
+        "inv_gamma(.4, .3)", class="shape")
+mod <- brmsformula(sample ~ kid_age_num*adult_did_num*kid_did_num+(1|kid)+(kid_age_num*adult_did_num*kid_did_num|site), family=negbinomial(link="log"))
+
+default_prior(mod, data=sample_mixed_effects)
+```
+
+unclear if Bayesian makes sense as a robustness effect, but need to choose priors if we do. 
+
 # Future
+
+## Interpretation
+
+
+### mixed effects models 
+if I understand correctly, the predictions of imitation are in particular a *cross-over* (type) effect -- i.e. that for each child behavior, it is higher in it's own category than the other category. Notably, this will be a subset of the cases with a credible interaction effect in the mixed effect model. 
+
+So, we really need the two separate models / the emmeans for each half. 
+
+In our testing, may want to reparameterize how we feed in values! to distinguish / not have centered values
+
+* child does A>B:
+* effect of adult A>B on child A:
+* effect of adult A>B on child B:
+
+(these three with age) 
+
+
+### chisq
+
+* the 3x3 chisq is not very sensitive (because we don't know how many 0s to expect)
+
+* the pairwise -- harder to think about, might depend on variances? definitely will want to simulate
+
+kids generally do lots of A-A, some B-A, equal A-B and B-B (A is more arousing to watch, kid_A indexes arousal, kid_B does not) --> 2/3 of kids do A-A > B-A; 1/2 of kids do A-B, half of kids do B-B (even distributions)
+A-A + B-B : 2/3 * 1/2
+B-A + A-B : 1/3 * 1/2
+will come out? as AA-BB >> BA-AB
+
+I think this again detects (some?) interaction effects, but doesn't distinguish interactions that would get different interpretations. 
+
+### wilcoxon
+
+I think this is fine? again depends on what we do with age and the imitation theory needs both kid_A and kid_B tests to have the predicted direction. 
+
+
+
+## What to use for wider effect-recovery / power-analysis simulations
 
 The above tried one sampling on one set of params.
 Once we have a sense of
 
 * what parameter ranges are relevant and
-* what outcomes are relevant (ex. significance on which tests)
+* what outcomes are relevant (ex. significance on which tests/contrasts)
 
 I can do power-analysis / aggregate across many simulations. 
 
 May want to check ex. ostenberg or davis meta-analysis to get ideas on # of actions/ unit time (mean & max plausible) and estimate of variance from different sources and estimates of simple effects (how common overall are MO v TP).
+
+* will definitely want to check for a variety of combos of main effects/types of interaction
+* will want to check against different levels of background variability
+* may want to power-analyse for different expt sizes
 
 Parameters:
 
