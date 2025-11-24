@@ -97,9 +97,10 @@ mismatch |> ggplot(aes(x=adult, y=value, color=kid))+geom_point()+geom_line(aes(
   coord_cartesian(ylim=c(0,6))
 
 ```
+
 # What does neg-binomial look like
 
-For data distribution, we're using a negative binomial distribution which should be good for count data without the forced mean-variance link that poisson has. 
+For data distribution, we're using a negative binomial distribution which should be good for count data without the forced mean-variance link that poisson has.
 
 ## Examples
 
@@ -128,7 +129,7 @@ sample_2 <- expand_grid(mean = c(1,3,9), dispersion = c(.5, 1, 10, 100)) |>
   unnest(dat)
 ```
 
-here's an example of what these distributions look like for different cohen's d, assuming mean of 3 and trying different dispersion values. 
+here's an example of what these distributions look like for different cohen's d, assuming mean of 3 and trying different dispersion values.
 
 ```{r}
 sample |>
@@ -146,7 +147,7 @@ sample_2 |>
                                          axis.text.y=element_blank())
 ```
 
-also, as a check, we can recover roughly the same cohen's d (using the normal calculation method for pooling sd, but we're at least ballpark okay). This does assume independence. 
+also, as a check, we can recover roughly the same cohen's d (using the normal calculation method for pooling sd, but we're at least ballpark okay). This does assume independence.
 
 ```{r}
 check <- sample |>
@@ -165,41 +166,41 @@ check |> ggplot(aes(x = d, y = d_calc, color = as.character(dispersion))) +
 
 # Simulation
 
-to start with, let's just simulate one set of data and explore it. 
+to start with, let's just simulate one set of data and explore it.
 
-Parameter selections: we need to choose values for these, for a first attempt these are some guesses. 
+Parameter selections: we need to choose values for these, for a first attempt these are some guesses.
 
 (experiment size)
 
-- number of labs: 10
-- number of infants / lab / age: 16
+-   number of labs: 10
+-   number of infants / lab / age: 16
 
 (distributional)
 
-- mean: 3 
-- dispersion: 1 (looks kinda reasonable from above)
-- max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15) 
+-   mean: 3
+-   dispersion: 1 (looks kinda reasonable from above)
+-   max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15)
 
 (fixed effects, all in units of SD)
 
-* interaction (match/mismatch) effect: .4
-* simple effect (A > B for child): .4
-* simple effect (A > B for adult): 0
-* age main effect: .2
-* age x interaction: .2
-* age x simple effect: .2
+-   interaction (match/mismatch) effect: .4
+-   simple effect (A \> B for child): .4
+-   simple effect (A \> B for adult): 0
+-   age main effect: .2
+-   age x interaction: .2
+-   age x simple effect: .2
 
 (random effects, all in units of SD)
 
-* sd of labs (intercept): .2
-* sd of labs (adult): .1
-* sd of labs (child): 0
-* sd of labs (adult x child): .2
-* sd of labs (age): 0
-* sd of labs (age x adult): 0
-* sd of labs (age x child): 0
-* sd of labs (age x adult x child): 0
-* sd of infants (intercept): .2
+-   sd of labs (intercept): .2
+-   sd of labs (adult): .1
+-   sd of labs (child): 0
+-   sd of labs (adult x child): .2
+-   sd of labs (age): 0
+-   sd of labs (age x adult): 0
+-   sd of labs (age x child): 0
+-   sd of labs (age x adult x child): 0
+-   sd of infants (intercept): .2
 
 ```{r}
 sample_neg_binom <- function(effect, mean, dispersion, max) {
@@ -214,7 +215,6 @@ sample_neg_binom <- function(effect, mean, dispersion, max) {
   ifelse(test_val > max, max, test_val)
 }
 ```
-
 
 ```{r}
 # set a bunch of params
@@ -241,7 +241,6 @@ sd_lab_age_child_adult_fx <- 0
 
 sd_child_intercept <- .2
 ```
-
 
 ```{r}
 setup_fixed_fx_only <- expand_grid(
@@ -353,6 +352,7 @@ sample_fixed_effects |>
   geom_vline(aes(xintercept = mean, color = match)) +
   facet_grid(~kid_age)
 ```
+
 ```{r}
 sample_fixed_effects |> ggplot(aes(x = reorder(site, sample), y = sample, color = kid_age)) +
   geom_jitter(alpha = .1) +
@@ -368,7 +368,7 @@ sample_fixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), panel.grid = element_blank())
 ```
 
-# viz sampling with mixed effects 
+# viz sampling with mixed effects
 
 ```{r}
 sample_mixed_effects |> ggplot(aes(x = sample)) +
@@ -408,6 +408,7 @@ sample_mixed_effects |>
   geom_vline(aes(xintercept = mean, color = match)) +
   facet_grid(~kid_age)
 ```
+
 (look at random effects)
 
 ```{r}
@@ -429,28 +430,29 @@ sample_mixed_effects |> ggplot(aes(x = reorder(kid, sample), y = sample)) +
 
 note: some models not represented here are
 
-* mixed effects models for each behavior separately
+-   mixed effects models for each behavior separately
 
-* time data for mouth open mixed effect model (which would need separate simulation)
+-   time data for mouth open mixed effect model (which would need separate simulation)
 
-### fixed effect model 
+### fixed effect model
 
 ```{r}
 fix_fx_mod <- MASS::glm.nb(sample ~ kid_age_num * adult_did_num * kid_did_num, data = sample_mixed_effects)
 
 summary(fix_fx_mod)
 ```
+
 (reminder: "true" values
 
-* child_adult_fx = .4
-* adult_fx = 0
-* child_fx = .4
-* age_fx = .2
-* age_adult_fx=0
-* age_child_fx=.2
-* age_child_adult_fx=.2)
+-   child_adult_fx = .4
+-   adult_fx = 0
+-   child_fx = .4
+-   age_fx = .2
+-   age_adult_fx=0
+-   age_child_fx=.2
+-   age_child_adult_fx=.2)
 
-### mixed effect model 
+### mixed effect model
 
 note that there are some convergence issues, so we may need to decide which are the most important random slopes!
 
@@ -473,18 +475,19 @@ EMM <- emmeans(mix_fx_mod, ~adult_did_num*kid_did_num)
 
 pairs(EMM, by="kid_did_num")
 ```
-this seems to get reversed sign, but consistent values with the individual version, so we could skip the individual versions and just use the emmeans to get the two halves out. 
+
+this seems to get reversed sign, but consistent values with the individual version, so we could skip the individual versions and just use the emmeans to get the two halves out.
 
 ### individual mixed effects models
 
 A is coded negative, so a negative coefficient on adult_did_num is supportive of imitation
+
 ```{r}
 mix_fx_mod_A <- glmer.nb(sample ~ kid_age_num * adult_did_num +
   (1 | kid) + (adult_did_num | site), data = sample_mixed_effects |> filter(kid_did=="kid_A"))
 
 summary(mix_fx_mod_A)
 ```
-
 
 B is coded positive, so a positive coefficient on adult_did_num is supportive of imitation
 
@@ -494,6 +497,7 @@ mix_fx_mod_B <- glmer.nb(sample ~ kid_age_num * adult_did_num +
 
 summary(mix_fx_mod_B)
 ```
+
 ### chi-sq test
 
 unclear what the age approach here is...
@@ -560,10 +564,9 @@ chisq.test(match_mismatch_age |> filter(kid_age == "younger") |> pull(n), p = c(
 chisq.test(match_mismatch_age |> filter(kid_age == "older") |> pull(n), p = c(.5, .5))
 ```
 
-
 ### wilcoxon matched-pairs signed-rank test
 
-again, not clear what the intended age thing is, so try together & split 
+again, not clear what the intended age thing is, so try together & split
 
 ```{r}
 type_A <- sample_mixed_effects |>
@@ -610,98 +613,90 @@ mod <- brmsformula(sample ~ kid_age_num*adult_did_num*kid_did_num+(1|kid)+(kid_a
 default_prior(mod, data=sample_mixed_effects)
 ```
 
-unclear if Bayesian makes sense as a robustness effect, but need to choose priors if we do. 
+unclear if Bayesian makes sense as a robustness effect, but need to choose priors if we do.
 
 # Future
 
 ## Interpretation
 
+### mixed effects models
 
-### mixed effects models 
-if I understand correctly, the predictions of imitation are in particular a *cross-over* (type) effect -- i.e. that for each child behavior, it is higher in it's own category than the other category. Notably, this will be a subset of the cases with a credible interaction effect in the mixed effect model. 
+if I understand correctly, the predictions of imitation are in particular a *cross-over* (type) effect -- i.e. that for each child behavior, it is higher in it's own category than the other category. Notably, this will be a subset of the cases with a credible interaction effect in the mixed effect model.
 
-So, we really need the two separate models / the emmeans for each half. 
+So, we really need the two separate models / the emmeans for each half.
 
 In our testing, may want to reparameterize how we feed in values! to distinguish / not have centered values
 
-* child does A>B:
-* effect of adult A>B on child A:
-* effect of adult A>B on child B:
+-   child does A\>B:
+-   effect of adult A\>B on child A:
+-   effect of adult A\>B on child B:
 
-(these three with age) 
-
+(these three with age)
 
 ### chisq
 
-* the 3x3 chisq is not very sensitive (because we don't know how many 0s to expect)
+-   the 3x3 chisq is not very sensitive (because we don't know how many 0s to expect)
 
-* the pairwise -- harder to think about, might depend on variances? definitely will want to simulate
+-   the pairwise -- harder to think about, might depend on variances? definitely will want to simulate
 
-kids generally do lots of A-A, some B-A, equal A-B and B-B (A is more arousing to watch, kid_A indexes arousal, kid_B does not) --> 2/3 of kids do A-A > B-A; 1/2 of kids do A-B, half of kids do B-B (even distributions)
-A-A + B-B : 2/3 * 1/2
-B-A + A-B : 1/3 * 1/2
-will come out? as AA-BB >> BA-AB
+kids generally do lots of A-A, some B-A, equal A-B and B-B (A is more arousing to watch, kid_A indexes arousal, kid_B does not) --\> 2/3 of kids do A-A \> B-A; 1/2 of kids do A-B, half of kids do B-B (even distributions) A-A + B-B : 2/3 \* 1/2 B-A + A-B : 1/3 \* 1/2 will come out? as AA-BB \>\> BA-AB
 
-I think this again detects (some?) interaction effects, but doesn't distinguish interactions that would get different interpretations. 
+I think this again detects (some?) interaction effects, but doesn't distinguish interactions that would get different interpretations.
 
 ### wilcoxon
 
-I think this is fine? again depends on what we do with age and the imitation theory needs both kid_A and kid_B tests to have the predicted direction. 
-
-
+I think this is fine? again depends on what we do with age and the imitation theory needs both kid_A and kid_B tests to have the predicted direction.
 
 ## What to use for wider effect-recovery / power-analysis simulations
 
-The above tried one sampling on one set of params.
-Once we have a sense of
+The above tried one sampling on one set of params. Once we have a sense of
 
-* what parameter ranges are relevant and
-* what outcomes are relevant (ex. significance on which tests/contrasts)
+-   what parameter ranges are relevant and
+-   what outcomes are relevant (ex. significance on which tests/contrasts)
 
-I can do power-analysis / aggregate across many simulations. 
+I can do power-analysis / aggregate across many simulations.
 
-May want to check ex. ostenberg or davis meta-analysis to get ideas on # of actions/ unit time (mean & max plausible) and estimate of variance from different sources and estimates of simple effects (how common overall are MO v TP).
+May want to check ex. ostenberg or davis meta-analysis to get ideas on \# of actions/ unit time (mean & max plausible) and estimate of variance from different sources and estimates of simple effects (how common overall are MO v TP).
 
-* will definitely want to check for a variety of combos of main effects/types of interaction
-* will want to check against different levels of background variability
-* may want to power-analyse for different expt sizes
+-   will definitely want to check for a variety of combos of main effects/types of interaction
+-   will want to check against different levels of background variability
+-   may want to power-analyse for different expt sizes
 
 Parameters:
 
 (experiment size)
 
-- number of labs: 10
-- number of infants / lab / age: 16
+-   number of labs: 10
+-   number of infants / lab / age: 16
 
 (distributional)
 
-- mean: 3 
-- dispersion: 1 (looks kinda reasonable from above)
-- max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15) 
+-   mean: 3
+-   dispersion: 1 (looks kinda reasonable from above)
+-   max value: 15 (since we're going to be pretty dispersed, we're going to replace values above 15 with 15)
 
 (fixed effects, all in units of SD)
 
-* interaction (match/mismatch) effect: .4
-* simple effect (A > B for child): .4
-* simple effect (A > B for adult): 0
-* age main effect: .2
-* age x interaction: .2
-* age x simple effect: .2
+-   interaction (match/mismatch) effect: .4
+-   simple effect (A \> B for child): .4
+-   simple effect (A \> B for adult): 0
+-   age main effect: .2
+-   age x interaction: .2
+-   age x simple effect: .2
 
 (random effects, all in units of SD)
 
-* sd of labs (intercept): .2
-* sd of labs (adult): .1
-* sd of labs (child): 0
-* sd of labs (adult x child): .2
-* sd of labs (age): 0
-* sd of labs (age x adult): 0
-* sd of labs (age x child): 0
-* sd of labs (age x adult x child): 0
-* sd of infants (intercept): .2
+-   sd of labs (intercept): .2
+-   sd of labs (adult): .1
+-   sd of labs (child): 0
+-   sd of labs (adult x child): .2
+-   sd of labs (age): 0
+-   sd of labs (age x adult): 0
+-   sd of labs (age x child): 0
+-   sd of labs (age x adult x child): 0
+-   sd of infants (intercept): .2
 
-
-
+````{=html}
 <!--
 
 Older
@@ -920,3 +915,4 @@ Models:
 * chi-square test (???)
 * wilcoxon test
 -->
+````
