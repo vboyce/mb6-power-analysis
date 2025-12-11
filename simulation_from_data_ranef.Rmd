@@ -1,0 +1,136 @@
+---
+title: "mb6-power-simulations"
+format: 
+  html:
+    toc: true
+    toc-location: body
+    toc-depth: 3
+    toc-expand: 3
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(broom)
+library(lme4)
+library(broom.mixed)
+theme_set(theme_bw())
+library(here)
+library(haven)
+library(ggthemes)
+library(viridis)
+```
+
+It's more of a pain to do random effects power simulation (in particular, the models are slow to run), but we're doing at least some since that's the model that will actually be used.
+
+This means that (in addition to everything else), we also need some bounds for how much variance is at the group or subject level.
+
+From previous MBs (1-4), we have (all in standardized units, ie. variance scaled to 1)
+
+-   Lab intercept SD: .1 (MB2), .2 (MB4), .3 (MB1, MB3),
+
+-   Lab effect SD: .05 (MB3), .08 (MB1), .14 (MB4)
+
+-   Infant intercept SD: .4 (MB1), .5 (MB3),
+
+-   Infant effect SD: .06 (MB1), .016 (MB3)
+
+So, especially since we can get per-infant correlations from the Oostenberg data and that per-baby effect correlations are small (and not very relevant here since we don't have many repeated measures), we'll just use paired real-baby data for that, and not add any new per-baby structure.
+
+For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. For the sake of laziness, well try 4 options: 
+
+* lab intercept of 0, lab effect of 0 (the null) 
+* lab intercept of .1, lab effect of 0 
+* lab intercept of .1, lab effect of .1 
+* lab intercept of .3, lab effect of .15
+
+for all of these, we'll only consider equal everywhere effects (aka no age effects).
+
+we will consider labs that each contribute 16 babies (either younger or older) for 3 labs each age group (\~50 babies per condition), 6 labs each age group (\~100 babies), 12 labs each conditions (\~200 babies). (24 lab option takes even longer to run and was dropped.)
+
+# Mess with real data
+
+```{r}
+week_1 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/1 week responses (cross-sectional data).sav")) |> mutate(source = "week1")
+
+week_3 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/3 week responses (cross-sectional data).sav")) |> mutate(source = "week3")
+
+week_6 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/6 week responses (cross-sectional data).sav")) |> mutate(source = "week6")
+
+week_9 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/9 week responses (cross-sectional data).sav")) |> mutate(source = "week9")
+
+raw_data <- week_1 |>
+  bind_rows(week_3, week_6, week_9) |>
+  select(Subject, source, starts_with("TP"), starts_with("MO")) |>
+  pivot_longer(!c(source, Subject), names_to = "type", values_to = "count") |>
+  mutate(
+    infant_behavior = str_split_i(type, 1, pattern = "[a-z0-9]+"),
+    adult_demo = str_split_i(type, 2, pattern = "[a-z0-9]+")
+  ) |>
+  filter(infant_behavior %in% c("TP", "MO")) |>
+  filter(!is.na(count)) |> 
+  mutate(count = count * 4) |>
+    mutate(age = ifelse(source %in% c("week3", "week1"), "younger", "older")) |>
+  mutate(Subject=str_c(Subject, source)) |> 
+    group_by(Subject, infant_behavior, age) |> 
+    slice_sample(n=2, replace=F) |> 
+    mutate(adult_demo=c("TP", "MO")) |> 
+  ungroup() |> 
+  mutate(infant_adult=str_c(infant_behavior, "_", adult_demo)) |> 
+  select(Subject, age, count, infant_adult) |> 
+  pivot_wider(id_cols=c("Subject", "age"),names_from=infant_adult, values_from=count) |> filter(!is.na(MO_MO), !is.na(TP_TP), !is.na(MO_TP), !is.na(TP_MO)) |> write_csv("raw_data_for_ranef.csv")
+```
+
+# Results 
+
+## Approach 1
+
+Because there is no age effect coded in, we only consider the ability to recover the interaction effect and an effect on TP/MO (because determining crossover needs these two). 
+
+```{r, fig.height=7, fig.width=7}
+ranef_output <- readRDS("output_ranef_2.rds")
+
+ranef_output |> filter(age=="all") |> ggplot(aes(x=samples, color=as.character(match_effect), y=sig))+geom_point()+
+  geom_line(aes(group=interaction(match_effect, lab_intercept_sd, lab_match_sd)))+
+  facet_grid(str_c("intercept_sd=",lab_intercept_sd,"\n, match_sd=",lab_match_sd)~type)+
+    geom_hline(lty="dashed", yintercept=.8)+
+  theme(legend.position = "bottom")
+
+```
+
+fine for interaction with .2 on \~50 babies fine for part on .2 with \~100 babies (or .4 on 50 babies)
+
+### check again non-random-effects version
+
+```{r}
+fixef_results <- readRDS("output.rds") |> bind_rows(readRDS("output2.rds")) |> bind_rows(readRDS("output3.rds")) |> 
+  filter(younger_TP_preference%in%c(0), overall_multiplier==1.5, overall_add==1, dispersion==1) |> 
+  mutate(baseline_factors=interaction(overall_multiplier, overall_add, dispersion, younger_TP_preference, older_TP_preference) |> as.factor(),
+         baseline_TP_preference=older_TP_preference |> as.factor()) |> filter(younger_TP_match==older_TP_match, younger_MO_match==older_MO_match, younger_MO_match==younger_TP_match) |> filter(younger_TP_match %in% c(0, .2, .4, .6)) |> mutate(match_effect=younger_TP_match) |> filter(age=="all") |> filter(samples!=400)
+
+fixef_results |> filter(age=="all") |> ggplot(aes(x=samples, color=as.character(match_effect), y=sig))+geom_point()+
+  geom_line(aes(group=interaction(match_effect)))+
+  facet_grid(str_c("fixed effects")~type)+
+    geom_hline(lty="dashed", yintercept=.8)+
+  theme(legend.position = "bottom")
+```
+Surprisingly, the random effects is looking more powered than the fixed-effects only. However, the simulation processes were not identical, so it's hard to tell what's actually going on. 
+
+## Approach 2
+
+I then tried a direct comparison between random and fixed effects models using the random-effects data. These are run on the exact same simulations, for effect sizes in .2, .3 and .4 (which seemed like the relevant range from above). 
+
+```{r, fig.height=7, fig.width=7}
+ranef_fixef_output <- readRDS("output_ranef_5.rds")
+
+ranef_fixef_output |> ggplot(aes(x=samples, color=as.character(match_effect), y=sig, shape=model, lty=model))+geom_point()+
+  geom_line( aes(group=interaction(match_effect, lab_intercept_sd, lab_match_sd, model)))+
+  facet_grid(str_c("intercept_sd=",lab_intercept_sd,"\n, match_sd=",lab_match_sd)~type)+
+    geom_hline(lty="dashed", yintercept=.8)+
+      geom_hline(lty="dashed", yintercept=.05)+scale_x_continuous(breaks=c(3, 6, 12))+
+  labs(x="Number of 16-baby labs per age group", y="Power", color="Match effect")+
+  theme(legend.position = "bottom")
+
+
+```
+
