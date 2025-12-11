@@ -23,42 +23,41 @@ library(viridis)
 
 # Summary
 
-The approach here was to use real data from Oostenbroek to get actual distributions of baby behavior and then modify it in various ways to approximate what MB6 data might look like under different options. In particular, I added different possible effect sizes of imitation across MO and TP behavior and across younger and older babies. Additionally, I considered a few different "baseline" options for what more alert babies over a longer time period might do. 
+The approach here was to use real data from Oostenbroek to get actual distributions of baby behavior and then modify it in various ways to approximate what MB6 data might look like under different options. In particular, I added different possible effect sizes of imitation across MO and TP behavior and across younger and older babies. Additionally, I considered a few different "baseline" options for what more alert babies over a longer time period might do.
 
-For each data-modification, I ran 100 simulations (re-creating and re-sampling the data) each for different sample sizes to get estimates of how often we would detect significant effects (in the predicted direction). I looked at power for interaction effects as well as MO-MO match and TP-TP match, all both in the overall sample and in each age group (younger and older). 
+For each data-modification, I ran 100 simulations (re-creating and re-sampling the data) each for different sample sizes to get estimates of how often we would detect significant effects (in the predicted direction). I looked at power for interaction effects as well as MO-MO match and TP-TP match, all both in the overall sample and in each age group (younger and older).
 
-I considered effect sizes from cohen's d of 0 to .7 (given meta-analysis of d=.68) for how much *more* an infant does behavior X when adult does X. Of note, we don't know that TP and MO will have the same size "match" effect, and distinguishing between some hypotheses hinge on whether *both* show a match effect. There is also uncertainty around whether match affects will occur evenly or unevenly across age groups. 
+I considered effect sizes from cohen's d of 0 to .7 (given meta-analysis of d=.68) for how much *more* an infant does behavior X when adult does X. Of note, we don't know that TP and MO will have the same size "match" effect, and distinguishing between some hypotheses hinge on whether *both* show a match effect. There is also uncertainty around whether match affects will occur evenly or unevenly across age groups.
 
-To summarize the results, 
+To summarize the results,
 
 Assuming a certain size effect for MO-MO match and TP-TP match, and that these are equal, then we would have 80% power on the overall interaction effect to
 
-* detect a .5 effect with 50 younger and 50 older babies
-* detect a .3 effect with 100 younger and 100 older babies 
-* detect a .2 effect with 200 younger and 200 older babies
+-   detect a .5 effect with 50 younger and 50 older babies
+-   detect a .3 effect with 100 younger and 100 older babies
+-   detect a .2 effect with 200 younger and 200 older babies
 
-To confirm a match-to-adult-sample effect, we would additionally like power to detect a significant increase of MO for MO-demo versus TP-demo and a significant increase of TP for TP-demo versus MO-demo. We would have 80% power for each of these for effect sizes of 
+To confirm a match-to-adult-sample effect, we would additionally like power to detect a significant increase of MO for MO-demo versus TP-demo and a significant increase of TP for TP-demo versus MO-demo. We would have 80% power for each of these for effect sizes of
 
-* .6 in 50 younger and 50 older babies 
-* .4 in 100 younger and 100 older babies 
-* .3 in 200 younger and 200 older babies
+-   .6 in 50 younger and 50 older babies
+-   .4 in 100 younger and 100 older babies
+-   .3 in 200 younger and 200 older babies
 
-If the effect sizes are uneven, the smaller effect size is the limiting factor on confirming that there is a match to target for each behavior. The overall interaction depends on both. 
+If the effect sizes are uneven, the smaller effect size is the limiting factor on confirming that there is a match to target for each behavior. The overall interaction depends on both.
 
 If the effect is *only* present in one age group, then approximately double the numbers for detecting the effect in *that age group*. (Or see analyses below, considering effects only in one age group.)
 
-It would be useful to get pilot data using the proposed paradigm to better estimate distributional factors than could get better power estimates because we'd better know what a baseline distribution of TP and MO behavior in alert babies over 90 seconds is. Shown above is when we would have 80% power under *any* of the options I considered, but this is a worst case, so piloting could narrow down the distributional uncertainty and determine that we actually have more power. 
+It would be useful to get pilot data using the proposed paradigm to better estimate distributional factors than could get better power estimates because we'd better know what a baseline distribution of TP and MO behavior in alert babies over 90 seconds is. Shown above is when we would have 80% power under *any* of the options I considered, but this is a worst case, so piloting could narrow down the distributional uncertainty and determine that we actually have more power.
 
-Most of the analyses below were done focus on a specific "middle-of-the-road" distribution (and thus show better power), but they are still useful for comparing across different effect sizes or effect size distributions.  
+Most of the analyses below were done focus on a specific "middle-of-the-road" distribution (and thus show better power), but they are still useful for comparing across different effect sizes or effect size distributions.
 
-Another note, given that there may be a preference to do more behavior overall to one adult demo compared to the other -- an overall preference for adult_TP displays will impede our ability to detect an MO-MO match effect, depending on the relevant sizes of the preferences. 
-  
+Another note, given that there may be a preference to do more behavior overall to one adult demo compared to the other -- an overall preference for adult_TP displays will impede our ability to detect an MO-MO match effect, depending on the relevant sizes of the preferences.
+
 # Real data
 
-We have data for Oostenbroek which in raw form has the number of behaviors averaged over 4 15 seond periods. 
+We have data for Oostenbroek which in raw form has the number of behaviors averaged over 4 15 seond periods.
 
-We use the data from 1 and 3 week old babies doing MO and TP behaviors were used for the younger category, and the
-data from 6 and 9 week old babies doing MO and TP behaviors were used for the older category. We use data regardless of the adult demonstrator behavior. We randomly reassign the data to be for the adult demos and TP and MO. 
+We use the data from 1 and 3 week old babies doing MO and TP behaviors were used for the younger category, and the data from 6 and 9 week old babies doing MO and TP behaviors were used for the older category. We use data regardless of the adult demonstrator behavior. We randomly reassign the data to be for the adult demos and TP and MO.
 
 ```{r, eval=F}
 week_1 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/1 week responses (cross-sectional data).sav")) |> mutate(source = "week1")
@@ -93,37 +92,36 @@ raw_data <- week_1 |>
 ```
 
 # Simulation process
-This is done in run_power_sim.R which was run on a cluster. 
-## data simulation
-for each run of the simulation:
+
+This is done in run_power_sim.R which was run on a cluster. \## data simulation for each run of the simulation:
 
 the data were at baseline juiced with:
 
-* a multiplier of 1.5 to go from 60 seconds to 90 seconds
-* an addition of a rnbinom with mean of  1, dispersion of 1 (to boost towards less sleepy baby behavior)
+-   a multiplier of 1.5 to go from 60 seconds to 90 seconds
+-   an addition of a rnbinom with mean of 1, dispersion of 1 (to boost towards less sleepy baby behavior)
 
 then depending on the condition, the data in certain conditions was boosted.
 
 we sampled effect values of
 
-* (younger| older) (TP-match | MO-match) each was a value on {0, .1, .2, .3, .4,.5, .6, .7}. 
+-   (younger\| older) (TP-match \| MO-match) each was a value on {0, .1, .2, .3, .4,.5, .6, .7}.
 
 These were multiplied by the sd of that condition (after baseline juicing) and then sampled with a rnbinom.
 
-
 For equal effect sizes in the 4 options (younger/older and TP/MO) we also considered some other parameter settings including
 
-* dispersion values: .3, 1, 3 (applied to all added rnbinoms)
-* overall add of rnbinom with mean of 0, 1
-* overall multiplier 1.5 or 2 to the raw data
-*  optionally add another rnbinom with mean .2 std deviations to just the adult_demo=TP conditions (this represents if babies are more aroused by adult_TP than adult_MO and do more stuff across the board) (a larger value of .6 was also tried, not shown because that swamps nearly all MO-match effects)
+-   dispersion values: .3, 1, 3 (applied to all added rnbinoms)
+-   overall add of rnbinom with mean of 0, 1
+-   overall multiplier 1.5 or 2 to the raw data
+-   optionally add another rnbinom with mean .2 std deviations to just the adult_demo=TP conditions (this represents if babies are more aroused by adult_TP than adult_MO and do more stuff across the board) (a larger value of .6 was also tried, not shown because that swamps nearly all MO-match effects)
 
-## sampling 
-We then sampled 50, 100, 200 or 400 trials from each condition (age x infant x adult). So the sample sizes are *per age group*. 
+## sampling
 
-We then ran glm.nb(count ~ age * adult_demo * infant_behavior, data = data) and used emmeans to extract the p-values on the contrasts of interest. 
+We then sampled 50, 100, 200 or 400 trials from each condition (age x infant x adult). So the sample sizes are *per age group*.
 
-Of note, this procedure does not include mixed effects both so that model will run faster and because this data juicing/sampling procedure breaks infant-level correlations that might exist in the source data (we just sampled trials, not babies). We also don't introduce simulated lab-level correlations. This choice could be revisited in the future. 
+We then ran glm.nb(count \~ age \* adult_demo \* infant_behavior, data = data) and used emmeans to extract the p-values on the contrasts of interest.
+
+Of note, this procedure does not include mixed effects both so that model will run faster and because this data juicing/sampling procedure breaks infant-level correlations that might exist in the source data (we just sampled trials, not babies). We also don't introduce simulated lab-level correlations. This choice could be revisited in the future.
 
 ## terms
 
@@ -131,9 +129,9 @@ We consider the significance of a number of terms
 
 (age: all, younger, older) x (interaction, MO-match, TP-match)
 
-Specifically, we count as "positive" the cases where p<.05 and the coefficient is in the "correct" direction.
+Specifically, we count as "positive" the cases where p\<.05 and the coefficient is in the "correct" direction.
 
-This both lets us see where we'd have power and also see what level of false-positive/non-interpretable we'd get for conditions where the measured effect is not actually there (ex: if we set the effect to 0 for younger babies, we should not see effects for younger babies in the outcome). 
+This both lets us see where we'd have power and also see what level of false-positive/non-interpretable we'd get for conditions where the measured effect is not actually there (ex: if we set the effect to 0 for younger babies, we should not see effects for younger babies in the outcome).
 
 ```{r}
 main_results <- readRDS("output.rds") |> bind_rows(readRDS("output2.rds")) |> bind_rows(readRDS("output3.rds")) |> 
@@ -156,26 +154,25 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
 )
 ```
 
-
 # Results: no age effects
 
-We first consider simulations where the effects are consistent across the two ages. 
+We first consider simulations where the effects are consistent across the two ages.
 
 ## effects are equal in all conditions
 
-Here we consider effects (of TP-TP match preference) of different sizes from 0 to .7. Here whatever effect size we set for TP-TP match is also the effect size for MO-MO match and is equal across both age groups. 
+Here we consider effects (of TP-TP match preference) of different sizes from 0 to .7. Here whatever effect size we set for TP-TP match is also the effect size for MO-MO match and is equal across both age groups.
 
 ```{r}
 
 main_results |>  filter( older_TP_match == younger_TP_match, older_MO_match == younger_MO_match, older_TP_match == older_MO_match) |>
   ggplot()+plot_opts+labs(color="effect size", title="All effects equal")
 ```
-Note that it takes about twice as many babies to have the same power if you go from the interaction to  MO-MO match and TP-TP match (half the data) or if you go from all babies to only one age group (half the data). 
 
+Note that it takes about twice as many babies to have the same power if you go from the interaction to MO-MO match and TP-TP match (half the data) or if you go from all babies to only one age group (half the data).
 
 ## effects are only present for TP
 
-If there's no MO match. Note that on the TP and interaction terms, this is difficult to distinguish from a small MO effect (see next). 
+If there's no MO match. Note that on the TP and interaction terms, this is difficult to distinguish from a small MO effect (see next).
 
 ```{r}
 
@@ -192,6 +189,7 @@ Here we consider if MO-match has an effect size of .2, how does variation in TP 
 main_results |> filter(overall_multiplier==1.5, overall_add==1, dispersion==1) |> filter( older_TP_match == younger_TP_match, older_MO_match==.2, younger_MO_match==.2) |>
   ggplot()+plot_opts+labs(color="effect size (TP)", title="Small MO effect, equal TP across age")
 ```
+
 # Results: Effects are only in older babies
 
 What if the effects are only in one age group? Here we consider effects for older babies, but similarish patterns should exist for effects in only younger babies.
@@ -203,6 +201,7 @@ What if the effects are only in one age group? Here we consider effects for olde
 main_results |> filter(overall_multiplier==1.5, overall_add==1, dispersion==1) |> filter(younger_TP_match ==0,  older_TP_match==older_MO_match, younger_MO_match == 0) |>
   ggplot()+plot_opts+labs(color="effect size", title="Equal effects in older babies only")
 ```
+
 ## Only TP
 
 ```{r}
@@ -211,6 +210,7 @@ main_results |> filter(younger_TP_match ==0,  older_MO_match==0, younger_MO_matc
   filter(overall_multiplier==1.5, overall_add==1, dispersion==1) |> 
   ggplot()+plot_opts+labs(color="effect size (TP)", title="Only TP effect, in older babies only")
 ```
+
 ## small MO
 
 ```{r}
@@ -219,11 +219,13 @@ main_results |> filter(younger_TP_match ==0,  older_MO_match==.2, younger_MO_mat
   filter(overall_multiplier==1.5, overall_add==1, dispersion==1) |> 
   ggplot()+plot_opts+labs(color="effect size (TP)", title="Older babies only, small MO effect, varying TP effect")
 ```
-# Results: robustness to distributional factors 
 
-In the above analyses, we looked only at 1 set of distributional/background settings. Here we explore the wider range, but only for the case of equal effects. Shown in red is the results that correspond to the condition used above. 
+# Results: robustness to distributional factors
 
-## to detect interaction effect 
+In the above analyses, we looked only at 1 set of distributional/background settings. Here we explore the wider range, but only for the case of equal effects. Shown in red is the results that correspond to the condition used above.
+
+## to detect interaction effect
+
 ```{r}
 robustness_results <-  readRDS("output.rds") |> bind_rows(readRDS("output2.rds")) |> bind_rows(readRDS("output3.rds")) |> 
   filter(younger_TP_preference%in%c(0, .2), older_TP_match == younger_TP_match, older_MO_match == younger_MO_match, older_TP_match == older_MO_match) |> 
@@ -247,7 +249,7 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
     theme(legend.position = "bottom")+ labs(y="power")+labs(color="effect size", title="All effects equal, interaction")
 ```
 
-## on MO-MO match effect 
+## on MO-MO match effect
 
 ```{r}
 
@@ -266,9 +268,10 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
     theme(legend.position = "bottom")+ labs(y="power")+labs(color="effect size", title="All effects equal, MO effect")
 ```
 
-An overall preference for TP (more likely to do more in response to adult TP demo) makes it harder to detect the MO-MO match because it raises the MO-TP rate. 
+An overall preference for TP (more likely to do more in response to adult TP demo) makes it harder to detect the MO-MO match because it raises the MO-TP rate.
 
-## on TP-TP match effect 
+## on TP-TP match effect
+
 ```{r}
 
 robustness_results |> filter(type=="TP", age=="all")  |>ggplot()+
@@ -286,4 +289,4 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
     theme(legend.position = "bottom")+ labs(y="power")+labs(color="effect size", title="All effects equal, TP effect")
 ```
 
-Conversely, an overall preference for TP (more likely to do more in response to adult TP demo) makes it easier to detect the TP-TP effect because it raises the TP-TP rate. 
+Conversely, an overall preference for TP (more likely to do more in response to adult TP demo) makes it easier to detect the TP-TP effect because it raises the TP-TP rate.
