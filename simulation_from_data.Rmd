@@ -339,7 +339,7 @@ From previous MBs (1-4), we have (all in standardized units, ie. variance scaled
 
 So, especially since we can get per-infant correlations from the Oostenberg data and that per-baby effect correlations are small (and not very relevant here since we don't have many repeated measures), we'll just use paired real-baby data for that, and not add any new per-baby structure.
 
-For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. For the sake of laziness, well try 4 options: 
+For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. We'll try 4 options to span the likely range: 
 
 * lab intercept of 0, lab effect of 0 (the null) 
 * lab intercept of .1, lab effect of 0 
