@@ -23,41 +23,65 @@ library(viridis)
 
 # Summary
 
-The approach here was to use real data from Oostenbroek to get actual distributions of baby behavior and then modify it in various ways to approximate what MB6 data might look like under different options. In particular, I added different possible effect sizes of imitation across MO and TP behavior and across younger and older babies. Additionally, I considered a few different "baseline" options for what more alert babies over a longer time period might do.
+We considered effect sizes from d of 0 to .7 (given meta-analysis d=.68) for how much *more* an infant does behavior X when adult does X than when adult does Y. Of note, we don't know that TP and MO will have the same size "match-to-sample" effect, and distinguishing between some hypotheses hinge on whether *both* show a match-to-sample effect. There is also uncertainty around whether match effects will occur evenly or unevenly across age groups.
 
-For each data-modification, I ran 100 simulations (re-creating and re-sampling the data) each for different sample sizes to get estimates of how often we would detect significant effects (in the predicted direction). I looked at power for interaction effects as well as MO-MO match and TP-TP match, all both in the overall sample and in each age group (younger and older).
+**To confirm a match-to-adult-sample effect, we need power to detect a significant increase of MO for MO-demo versus TP-demo and a significant increase of TP for TP-demo versus MO-demo.** 
 
-I considered effect sizes from cohen's d of 0 to .7 (given meta-analysis of d=.68) for how much *more* an infant does behavior X when adult does X. Of note, we don't know that TP and MO will have the same size "match" effect, and distinguishing between some hypotheses hinge on whether *both* show a match effect. There is also uncertainty around whether match affects will occur evenly or unevenly across age groups.
+**Under "worst-case of reasonable options" models, we would have 80% power to detect**
 
-To summarize the results,
+* **an effect of d=.6 in 50 babies per age group (100 babies total, ~6 labs of 16 babies each)**
 
-Assuming a certain size effect for MO-MO match and TP-TP match, and that these are equal, then we would have 80% power on the overall interaction effect to
+* **an effect of d=.4 in 100 babies per age group (200 babies total, ~12 labs of 16 babies each)**
 
--   detect a .5 effect with 50 younger and 50 older babies
--   detect a .3 effect with 100 younger and 100 older babies
--   detect a .2 effect with 200 younger and 200 older babies
+* **an effect of d=.3 in 200 babies per age group (400 babies total, ~24 labs of 16 babies each)**
 
-To confirm a match-to-adult-sample effect, we would additionally like power to detect a significant increase of MO for MO-demo versus TP-demo and a significant increase of TP for TP-demo versus MO-demo. We would have 80% power for each of these for effect sizes of
+**To buffer for unaccounted for sources of variation that could decrease power, we may want to be even more conservative.**
 
--   .6 in 50 younger and 50 older babies
--   .4 in 100 younger and 100 older babies
--   .3 in 200 younger and 200 older babies
+We are better powered to detect an overall interaction effect, but the interaction effect alone does not fully distinguish the hypotheses of interest. We have 80% power to detect the interaction effect when the individual match effects are 
 
-If the effect sizes are uneven, the smaller effect size is the limiting factor on confirming that there is a match to target for each behavior. The overall interaction depends on both.
+* d=.5 with 50 babies in each age group (100 babies total, ~6 labs of 16 babies each)
+
+* d=.3 with 100 babies in each age group (200 babies total, ~12 labs of 16 babies each)
+
+* d=.2 with 200 babies in each age group (400 babies total, ~24 labs of 16 babies each)
+
+If the effect sizes are uneven, the smaller effect size is the limiting factor on confirming that there is a match-to-target for each behavior. The overall interaction depends on both.
 
 If the effect is *only* present in one age group, then approximately double the numbers for detecting the effect in *that age group*. (Or see analyses below, considering effects only in one age group.)
 
-It would be useful to get pilot data using the proposed paradigm to better estimate distributional factors than could get better power estimates because we'd better know what a baseline distribution of TP and MO behavior in alert babies over 90 seconds is. Shown above is when we would have 80% power under *any* of the options I considered, but this is a worst case, so piloting could narrow down the distributional uncertainty and determine that we actually have more power.
+We used real data from Oostenbroek to get actual distributions of baby behavior and then modified it in various ways to approximate what MB6 data might look like under different parameters. In particular, I added different possible effect sizes of imitation across MO and TP behavior and across younger and older babies. Additionally, I considered a few different "baseline" options for what more alert babies over a longer time period might do. 100 simulations were run for each combination of parameters (30 simulations for random-effects models due to model slowness). 
 
-Most of the analyses below were done focus on a specific "middle-of-the-road" distribution (and thus show better power), but they are still useful for comparing across different effect sizes or effect size distributions.
+There's a lot of uncertainty about what our data might look like along various dimensions. Because doing a full grid search of all options was not feasible, I did a sequence of simulations. From these we can extrapolate roughly what the power would be for combinations not considered. 
 
-Another note, given that there may be a preference to do more behavior overall to one adult demo compared to the other -- an overall preference for adult_TP displays will impede our ability to detect an MO-MO match effect, depending on the relevant sizes of the preferences.
+# Factors affecting power
+There are a number of factors that could affect the power.
 
-# Real data
+## Distributional
+Given that this is count data, we assume it is roughly shaped like a negative binomial, so we sample from negative binomial distributions when we need to add effects to some or all of the data (using the function rnbinom). 
+These simulations were based on the Oostenbroek data, using both a multiplier on the real behavior (to account for longer time period and possibly more alert babies) and sometimes the addition of an rnbinom (accounting for more alert babies). We also vary the distributional parameter used for all the rnbinoms used to add effects (affecting data dispersion). These are not of primary interest, but can affect power. 
+
+## Grouping structure 
+For ease, most of the analyses were run using fixed-effect models on data where there was no grouping structure (all child-level groupings from the Oostenbroek data were broken). However, the actual planned models are random-effects models to take into account the groupings of data by-child and by-lab. To explore the effects of fixed-versus-random on power, I ran parallel simulations on both models for a) data generated with no random-effects and b) data generated with random-effects. 
+
+Running a random-effects model on data without it is likely a worst case, whereas random-effects models should outperform of data that does have strong random-effects groupings.
+
+For data-generation with random effects, we kept the per-infant-test-session groupings in the data, did distributional boosts per baby (enhancing infant-level intercepts) and simulated lab-level intercepts and match-effects. We considered a few scales of lab-level effects, based on the observed ranges from previous MB studies to estimate the fraction of variance that we might see from lab-level groupings. 
+
+## Effect size and distribution
+We consider effect sizes as how much more an infant does a given behavior to the matched adult-demo versus the non-matched-adult-demo. 
+It is possible that there are different effects for MO-MO match versus TP-TP match and for younger versus older babies. 
+We consider effects from d=0 to d=.7 (give the meta-analysis with d=.68). 
+In order to determine that a pattern of results is a match-to-demo (and not explainable as arousal), we need to find both an MO-MO match and a TP-TP match effect. Thus, the limiting factor is likely the smaller of these two.
+If the effect sizes are also varying across the two ages, then we either need to detect the effects in that age group or the overall effects need to be large enough to detect in the sample as a whole. 
+
+There may be a preference to do more behavior overall to one adult demo compared to the other -- an overall preference for adult_TP displays will impede our ability to detect a match effect for MO, because it will reduce the size of the MO-MO match effect. 
+
+# Simulation procedure (fixed effects)
+## Real data
 
 We have data for Oostenbroek which in raw form has the number of behaviors averaged over 4 15 seond periods.
 
-We use the data from 1 and 3 week old babies doing MO and TP behaviors were used for the younger category, and the data from 6 and 9 week old babies doing MO and TP behaviors were used for the older category. We use data regardless of the adult demonstrator behavior. We randomly reassign the data to be for the adult demos and TP and MO.
+We use the data from 1 and 3 week old babies doing MO and TP behaviors for the younger category, and the data from 6 and 9 week old babies doing MO and TP behaviors for the older category. We use data regardless of the adult demonstrator behavior. We randomly reassign the data to be for the adult demos and TP and MO.
 
 ```{r, eval=F}
 week_1 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/1 week responses (cross-sectional data).sav")) |> mutate(source = "week1")
@@ -91,9 +115,11 @@ raw_data <- week_1 |>
   write_csv(here("raw.csv"))
 ```
 
-# Simulation process
+## Simulation process
 
-This is done in run_power_sim.R which was run on a cluster. \## data simulation for each run of the simulation:
+This is done in `run_power_sim.R` which was run on a cluster. Different sets of parameter values were run sequentially.
+
+### data for each run of the simulation:
 
 the data were at baseline juiced with:
 
@@ -113,17 +139,15 @@ For equal effect sizes in the 4 options (younger/older and TP/MO) we also consid
 -   dispersion values: .3, 1, 3 (applied to all added rnbinoms)
 -   overall add of rnbinom with mean of 0, 1
 -   overall multiplier 1.5 or 2 to the raw data
--   optionally add another rnbinom with mean .2 std deviations to just the adult_demo=TP conditions (this represents if babies are more aroused by adult_TP than adult_MO and do more stuff across the board) (a larger value of .6 was also tried, not shown because that swamps nearly all MO-match effects)
+-   optionally add another rnbinom with mean .2 std deviations to just the adult_demo=TP conditions (this represents if babies are more aroused by adult_TP than adult_MO and do more stuff across the board) (a larger value of .6 was also tried, not shown because that swamps nearly all MO-match effects) (this is roughly the same as adding .2 to the TP match-effect and subtracting .2 from the MO-match effect)
 
-## sampling
+### sampling
 
 We then sampled 50, 100, 200 or 400 trials from each condition (age x infant x adult). So the sample sizes are *per age group*.
 
 We then ran glm.nb(count \~ age \* adult_demo \* infant_behavior, data = data) and used emmeans to extract the p-values on the contrasts of interest.
 
-Of note, this procedure does not include mixed effects both so that model will run faster and because this data juicing/sampling procedure breaks infant-level correlations that might exist in the source data (we just sampled trials, not babies). We also don't introduce simulated lab-level correlations. This choice could be revisited in the future.
-
-## terms
+### terms
 
 We consider the significance of a number of terms
 
@@ -142,19 +166,23 @@ main_results <- readRDS("output.rds") |> bind_rows(readRDS("output2.rds")) |> bi
 
 ```{r}
 
+palette_effect <- c("0"="grey", "0.1"="#440154FF","0.2"="#443A83FF",
+                    "0.3"="#31688EFF","0.4"="#21908CFF","0.5" ="#35B779FF", 
+"0.6"="#8FD744FF", "0.7"="#FDE725FF")
+
 plot_opts <- list(
 geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
                                  group = interaction(older_TP_match, baseline_TP_preference))),
                   geom_line(aes(x=samples, y=sig, color=as.factor(older_TP_match),
                                  group = interaction(older_TP_match, baseline_TP_preference))),
-  scale_color_viridis(discrete = T),
+  scale_color_manual(values=palette_effect),
   geom_hline(yintercept = .8, lty = "dotted"),
     facet_grid(str_c("age:",age)~str_c("term:",type)),
     theme(legend.position = "bottom"), labs(y="power")
 )
 ```
 
-# Results: no age effects
+# Fixed effects results: no age effects
 
 We first consider simulations where the effects are consistent across the two ages.
 
@@ -190,9 +218,9 @@ main_results |> filter(overall_multiplier==1.5, overall_add==1, dispersion==1) |
   ggplot()+plot_opts+labs(color="effect size (TP)", title="Small MO effect, equal TP across age")
 ```
 
-# Results: Effects are only in older babies
+# Fixed effects results: Effects are only in older babies
 
-What if the effects are only in one age group? Here we consider effects for older babies, but similarish patterns should exist for effects in only younger babies.
+What if the effects are only in one age group? Here we consider effects for older babies, but similar patterns should exist for effects in only younger babies.
 
 ## equal effects
 
@@ -220,7 +248,7 @@ main_results |> filter(younger_TP_match ==0,  older_MO_match==.2, younger_MO_mat
   ggplot()+plot_opts+labs(color="effect size (TP)", title="Older babies only, small MO effect, varying TP effect")
 ```
 
-# Results: robustness to distributional factors
+# Fixed effects results: robustness to distributional factors
 
 In the above analyses, we looked only at 1 set of distributional/background settings. Here we explore the wider range, but only for the case of equal effects. Shown in red is the results that correspond to the condition used above.
 
@@ -262,7 +290,7 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
    geom_point(data=prev |> filter(type=="MO"), aes(x=samples, y=sig,
                shape=baseline_TP_preference,
                                  group = interaction(baseline_factors, older_TP_match, baseline_TP_preference)), color="red")+
-  scale_color_viridis(discrete = T)+
+  scale_color_manual(values=palette_effect)+
   geom_hline(yintercept = .8, lty = "dotted")+
     facet_wrap(~older_TP_match)+
     theme(legend.position = "bottom")+ labs(y="power")+labs(color="effect size", title="All effects equal, MO effect")
@@ -280,7 +308,7 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
                                  group = interaction(baseline_factors, older_TP_match, baseline_TP_preference)))+
                   geom_line(aes(x=samples, y=sig, lty=baseline_TP_preference, color=as.factor(older_TP_match),
                                  group = interaction(baseline_factors, older_TP_match, baseline_TP_preference)))+
-  scale_color_viridis(discrete = T)+
+  scale_color_manual(values=palette_effect)+
    geom_point(data=prev |> filter(type=="MO"), aes(x=samples, y=sig,
                shape=baseline_TP_preference,
                                  group = interaction(baseline_factors, older_TP_match, baseline_TP_preference)), color="red")+
@@ -290,3 +318,131 @@ geom_point(aes(x=samples, y=sig, color=as.factor(older_TP_match),
 ```
 
 Conversely, an overall preference for TP (more likely to do more in response to adult TP demo) makes it easier to detect the TP-TP effect because it raises the TP-TP rate.
+
+# Simulation with random effects 
+
+## Random effects model on data with random effects 
+
+It's more of a pain to do random effects power simulation (in particular, the models are slow to run), but we're doing at least some since that's the model that will actually be used.
+
+This means that (in addition to everything else), we also need some bounds for how much variance is at the group or subject level.
+
+From previous MBs (1-4), we have (all in standardized units, ie. variance scaled to 1)
+
+-   Lab intercept SD: .1 (MB2), .2 (MB4), .3 (MB1, MB3),
+
+-   Lab effect SD: .05 (MB3), .08 (MB1), .14 (MB4)
+
+-   Infant intercept SD: .4 (MB1), .5 (MB3),
+
+-   Infant effect SD: .06 (MB1), .016 (MB3)
+
+So, especially since we can get per-infant correlations from the Oostenberg data and that per-baby effect correlations are small (and not very relevant here since we don't have many repeated measures), we'll just use paired real-baby data for that, and not add any new per-baby structure.
+
+For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. For the sake of laziness, well try 4 options: 
+
+* lab intercept of 0, lab effect of 0 (the null) 
+* lab intercept of .1, lab effect of 0 
+* lab intercept of .1, lab effect of .1 
+* lab intercept of .3, lab effect of .15
+
+for all of these, we'll only consider equal everywhere effects (aka no age effects).
+
+we will consider labs that each contribute 16 babies (either younger or older) for 3 labs each age group (\~50 babies per condition), 6 labs each age group (\~100 babies), 12 labs each conditions (\~200 babies). (24 lab option takes even longer to run and was dropped.)
+
+### Mess with real data
+
+```{r}
+week_1 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/1 week responses (cross-sectional data).sav")) |> mutate(source = "week1")
+
+week_3 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/3 week responses (cross-sectional data).sav")) |> mutate(source = "week3")
+
+week_6 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/6 week responses (cross-sectional data).sav")) |> mutate(source = "week6")
+
+week_9 <- read_sav(here("sample_data/Cross-sectional analyses (SPSS)/9 week responses (cross-sectional data).sav")) |> mutate(source = "week9")
+
+raw_data <- week_1 |>
+  bind_rows(week_3, week_6, week_9) |>
+  select(Subject, source, starts_with("TP"), starts_with("MO")) |>
+  pivot_longer(!c(source, Subject), names_to = "type", values_to = "count") |>
+  mutate(
+    infant_behavior = str_split_i(type, 1, pattern = "[a-z0-9]+"),
+    adult_demo = str_split_i(type, 2, pattern = "[a-z0-9]+")
+  ) |>
+  filter(infant_behavior %in% c("TP", "MO")) |>
+  filter(!is.na(count)) |> 
+  mutate(count = count * 4) |>
+    mutate(age = ifelse(source %in% c("week3", "week1"), "younger", "older")) |>
+  mutate(Subject=str_c(Subject, source)) |> 
+    group_by(Subject, infant_behavior, age) |> 
+    slice_sample(n=2, replace=F) |> 
+    mutate(adult_demo=c("TP", "MO")) |> 
+  ungroup() |> 
+  mutate(infant_adult=str_c(infant_behavior, "_", adult_demo)) |> 
+  select(Subject, age, count, infant_adult) |> 
+  pivot_wider(id_cols=c("Subject", "age"),names_from=infant_adult, values_from=count) |> filter(!is.na(MO_MO), !is.na(TP_TP), !is.na(MO_TP), !is.na(TP_MO)) |> write_csv("raw_data_for_ranef.csv")
+```
+
+### Simulation process
+
+Process (run in `run_power_sim_ranef.R`) was generally similar to with fixed effects. 
+
+the data were at baseline juiced with:
+
+-   a multiplier of 1.5 to go from 60 seconds to 90 seconds
+-   an addition of a rnbinom with mean of 1, dispersion of 1, grouped by baby
+
+For each lab of 16 babies (in an age group) a lab intercept and lab match effect were sampled. 
+
+we sampled effect values of
+
+-   match with a value on {0, .1, .2, .3, .4}.
+
+We added up the intercept and match values (where applicable) to get the mean for the rnbinom to juice a given datapoint. If it was negative, we ran an rnbinom with the positive mean and subtracted it (relevant because lab intercepts and match effects could be negative). After the whole process, data were winsorized back to 0-15 keep numbers of simulated behaviors non-negative and prevent unrealistically large behavior counts. 
+
+# Random effects results 
+
+## on data with random-effects 
+
+I ran a direct comparison between random and fixed effects models using the random-effects data. These are run on the exact same simulations, for effect sizes in 0, .1, .2, .3 and .4 (which seemed like the relevant range from above). 
+
+```{r, fig.height=7, fig.width=7}
+ranef_fixef_output <- readRDS("output_ranef_5.rds")
+
+ranef_fixef_output |> ggplot(aes(x=samples, color=as.character(match_effect), y=sig, shape=model, lty=model))+geom_point()+
+  geom_line( aes(group=interaction(match_effect, lab_intercept_sd, lab_match_sd, model)))+
+  facet_grid(str_c("intercept_sd=",lab_intercept_sd,"\n, match_sd=",lab_match_sd)~type)+
+    geom_hline(lty="dashed", yintercept=.8)+
+  scale_color_manual(values=palette_effect)+
+      geom_hline(lty="dashed", yintercept=.05)+scale_x_continuous(breaks=c(3, 6, 12))+
+  labs(x="Number of 16-baby labs per age group", y="Power", color="Match effect")+
+  theme(legend.position = "bottom")
+
+
+```
+
+Note there here, where the are (at least some) true random effects, the random effects model is better powered. 
+
+## on data with only fixed effects 
+
+We also tried a ~ worst case scenario of running the random effects structure on data simulated without any grouping effects built in (`run_power_sim_ranef_2.R`). 
+
+We only considered all equal match effects of 0 - .4, with an overall_multiplier of 1.5 and an overall_add of 0 (given what seemed to be lower powered from fixed effects robustness exploration), and we considered a range of dispersion values (.3, 1, 3).
+
+```{r, fig.height=7, fig.width=7}
+ranef_fixef_output_2 <- readRDS("output_ranef_2_1.rds") |> 
+  mutate(match_effect=younger_TP_match)
+
+ranef_fixef_output_2 |> filter(age=="all") |> ggplot(aes(x=samples, color=as.character(match_effect), y=sig, shape=model, lty=model))+geom_point()+
+  geom_line( aes(group=interaction(match_effect, model, dispersion)))+
+  facet_grid(str_c("dispersion_param=",dispersion)~type)+
+    scale_color_manual(values=palette_effect)+
+    geom_hline(lty="dotted", yintercept=.8)+
+      geom_hline(lty="dashed", yintercept=.05)+scale_x_continuous(breaks=c(3, 6, 12))+
+  labs(x="Number of 16-baby labs per age group", y="Power", color="Match effect")+
+  theme(legend.position = "bottom")
+
+
+```
+
+The big takeaway is that, even in the absence of true random effects, a random effects model has close to the same power as the fixed effects model. 

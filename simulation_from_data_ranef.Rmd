@@ -37,12 +37,12 @@ From previous MBs (1-4), we have (all in standardized units, ie. variance scaled
 
 So, especially since we can get per-infant correlations from the Oostenberg data and that per-baby effect correlations are small (and not very relevant here since we don't have many repeated measures), we'll just use paired real-baby data for that, and not add any new per-baby structure.
 
-For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. For the sake of laziness, well try 4 options: 
+For lab, it looks like lab effects are around .1 and lab intercepts range (when measureable) from .1 to .3. For the sake of laziness, well try 4 options:
 
-* lab intercept of 0, lab effect of 0 (the null) 
-* lab intercept of .1, lab effect of 0 
-* lab intercept of .1, lab effect of .1 
-* lab intercept of .3, lab effect of .15
+-   lab intercept of 0, lab effect of 0 (the null)
+-   lab intercept of .1, lab effect of 0
+-   lab intercept of .1, lab effect of .1
+-   lab intercept of .3, lab effect of .15
 
 for all of these, we'll only consider equal everywhere effects (aka no age effects).
 
@@ -81,11 +81,11 @@ raw_data <- week_1 |>
   pivot_wider(id_cols=c("Subject", "age"),names_from=infant_adult, values_from=count) |> filter(!is.na(MO_MO), !is.na(TP_TP), !is.na(MO_TP), !is.na(TP_MO)) |> write_csv("raw_data_for_ranef.csv")
 ```
 
-# Results 
+# Results
 
 ## Approach 1
 
-Because there is no age effect coded in, we only consider the ability to recover the interaction effect and an effect on TP/MO (because determining crossover needs these two). 
+Because there is no age effect coded in, we only consider the ability to recover the interaction effect and an effect on TP/MO (because determining crossover needs these two).
 
 ```{r, fig.height=7, fig.width=7}
 ranef_output <- readRDS("output_ranef_2.rds")
@@ -114,11 +114,12 @@ fixef_results |> filter(age=="all") |> ggplot(aes(x=samples, color=as.character(
     geom_hline(lty="dashed", yintercept=.8)+
   theme(legend.position = "bottom")
 ```
-Surprisingly, the random effects is looking more powered than the fixed-effects only. However, the simulation processes were not identical, so it's hard to tell what's actually going on. 
+
+Surprisingly, the random effects is looking more powered than the fixed-effects only. However, the simulation processes were not identical, so it's hard to tell what's actually going on.
 
 ## Approach 2
 
-I then tried a direct comparison between random and fixed effects models using the random-effects data. These are run on the exact same simulations, for effect sizes in .2, .3 and .4 (which seemed like the relevant range from above). 
+I then tried a direct comparison between random and fixed effects models using the random-effects data. These are run on the exact same simulations, for effect sizes in 0, .1, .2, .3 and .4 (which seemed like the relevant range from above).
 
 ```{r, fig.height=7, fig.width=7}
 ranef_fixef_output <- readRDS("output_ranef_5.rds")
@@ -133,4 +134,3 @@ ranef_fixef_output |> ggplot(aes(x=samples, color=as.character(match_effect), y=
 
 
 ```
-
